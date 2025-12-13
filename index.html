@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mapa de Escuelas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    (function(){
+      var l = document.querySelector('link[href="style.css"]');
+      if (l) { l.href = 'style.css?v=' + Date.now(); }
+    })();
+  </script>
+  <style>
+    @font-face { font-family: 'CooperBlackCustom'; src: url('CooperBlackCustom.otf') format('opentype'); font-weight: normal; font-style: normal; }
+    @font-face { font-family: 'CalibriCustom'; src: url('CalibriCustom.TTF') format('truetype'); font-weight: normal; font-style: normal; }
+    
+    html, body { margin:0; height:100%; color-scheme: only light; font-family: 'CalibriCustom', Arial, sans-serif; }
+    #splash { background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+    .circle-bounce { width: 300px; height: 300px; background:#fff; border-radius:50%; box-shadow: 0 0 40px 8px #fff8, 0 8px 32px #0006; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:40px; animation: bounce 1.6s infinite cubic-bezier(.5,0,.5,1); position: relative; animation-duration: 5s; user-select: none; }
+    @keyframes bounce { 0%{ transform: translateY(0);} 20%{ transform: translateY(-36px);} 40%{ transform: translateY(0);} 60%{ transform: translateY(-22px);} 80%{ transform: translateY(0);} 100%{ transform: translateY(0);} }
+    .la-raiz { font-size:3em; color:#222; letter-spacing:2px; font-weight:bold; font-family:'CooperBlackCustom','Cooper Black', serif; }
+    .agrupacion { font-size:1.5em; color:#222; font-weight:bold; margin-top:8px; font-family:'CalibriCustom', Arial, sans-serif; }
+    .splash-title { font-size:2.2em; color:#fff; font-weight:bold; letter-spacing:1px; margin-bottom:12px; text-align:center; position:fixed; top:65%; left:50%; transform:translateX(-50%); width:90%; max-width:600px; }
+.splash-subtitle { font-size:1.3em; color:#fff; margin-bottom:18px; text-align:center; position:fixed; top:70%; left:50%; transform:translateX(-50%); width:90%; max-width:600px; }
+    .splash-btn { background:#fff; color:#222; font-size:1.1em; font-weight:bold; border:none; border-radius:16px; padding:12px 32px; cursor:pointer; letter-spacing:2px; transition: box-shadow 0.3s ease, background-color 0.3s ease; animation: pulseSoft 2.2s infinite; }
+     .splash-texts-container { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:15; }
+      #splash { z-index:5; }
+      #flagContainer { z-index:20; }
+     .splash-texts-container .splash-title { position:absolute; top:68%; left:50%; transform:translateX(-50%); font-size:2.2em; color:#fff; font-weight:bold; letter-spacing:1px; text-align:center; width:90%; max-width:600px; pointer-events:auto; margin-bottom:25px; }
+      .splash-texts-container .splash-subtitle { position:absolute; top:75%; left:50%; transform:translateX(-50%); font-size:1.3em; color:#fff; text-align:center; width:auto; max-width:80%; pointer-events:auto; line-height:1.2; white-space:nowrap; }
+      .btn-container { position:absolute; bottom:12%; left:50%; transform:translateX(-50%); width:260px; pointer-events:auto; }
+      .splash-texts-container .splash-btn { width:100%; background:#fff; color:#222; font-size:1.0em; font-weight:bold; border:none; border-radius:25px; padding:16px 15px; cursor:pointer; letter-spacing:1px; transition: all 0.3s ease; animation: pulseButton 2.2s infinite; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position: relative; box-shadow: 0 0 0 rgba(255,255,255,0.3) inset; }
+    .splash-texts-container .splash-btn::before { content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; background: linear-gradient(45deg, #ffffff, #f0f0f0, #ffffff); border-radius: 27px; z-index: -1; opacity: 0; transition: opacity 0.3s ease; }
+    .splash-texts-container .splash-btn:hover::before { opacity: 1; }
+    .splash-texts-container .splash-btn:hover { box-shadow: 0 0 20px rgba(255,255,255,0.4) inset, 0 6px 25px rgba(0,0,0,0.2); }
+    @keyframes pulseSoft { 0%{ box-shadow: 0 2px 8px rgba(0,0,0,0.15); } 50%{ box-shadow: 0 6px 20px rgba(0,0,0,0.25); background-color: #ffffff; } 100%{ box-shadow: 0 2px 8px rgba(0,0,0,0.15); } }
+     @keyframes pulse { 0%{ box-shadow: 0 1px 1px 0 #fff0, 0 1px 1px #0001;} 50%{ box-shadow: 0 4px 8px 0 #fff0, 0 4px 8px #2222;} 100%{ box-shadow: 0 1px 1px 0 #fff0, 0 1px 1px #0001;} }
+    #mainApp { display:none; height:100vh; }
+
+    #flagContainer { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 250px; z-index: 2001; display: none; cursor: pointer; overflow: visible; }
+    #flagPoleLeft, #flagPoleRight { position: absolute; bottom: -200px; width: 10px; height: 450px; background: linear-gradient(to right, #8B4513, #A0522D, #8B4513); border-radius: 5px; box-shadow: 2px 0 6px rgba(0,0,0,0.3); }
+    #flagPoleLeft { left: 15px; }
+    #flagPoleRight { right: 15px; }
+    #flagFabric { 
+      position: absolute; 
+      top: 0px; 
+      left: 30px; 
+      width: calc(100% - 60px); /* Ancho fijo: contenedor menos 30px de cada lado */
+      max-width: 320px; /* Máximo ancho para que quepa entre las cañas */
+      box-sizing: border-box; /* Incluir padding y border en el ancho total */
+      height: 150px; 
+      background: 
+        /* Textura rústica simplificada */
+        radial-gradient(ellipse at 20% 30%, rgba(230, 230, 230, 0.4) 3px, transparent 5px),
+        radial-gradient(ellipse at 80% 20%, rgba(220, 220, 220, 0.3) 2px, transparent 4px),
+        radial-gradient(ellipse at 60% 80%, rgba(240, 240, 240, 0.2) 2px, transparent 3px),
+        /* Base tela rústica */
+        linear-gradient(135deg, #f0f0f0 0%, #e5e5e5 25%, #f5f5f5 50%, #ebebeb 75%, #f2f2f2 100%);
+      background-size: 30px 25px, 25px 30px, 35px 40px, 100% 100%;
+      border-radius: 8px; 
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.02);
+      overflow: visible;
+      filter: contrast(1.05) brightness(1.0);
+      transform-style: preserve-3d;
+      position: relative;
+    }
+    #flagFabric::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        /* Textura rústica ligera */
+        radial-gradient(ellipse at 30% 25%, rgba(235,235,235,0.2) 2px, transparent 3px),
+        radial-gradient(ellipse at 70% 75%, rgba(225,225,225,0.15) 1px, transparent 2px);
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    #flagFabric::after {
+      display: none;
+    }
+
+    #flagText { 
+      position: absolute; 
+      top: 20px; 
+      left: 0; 
+      right: 0; 
+      text-align: center; 
+      font-family: 'CooperBlackCustom', 'Cooper Black', serif; 
+      font-size: 2.8em; 
+      color: black; 
+      font-weight: normal; 
+      letter-spacing: 1px; 
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+      animation: flagTextWave 3s ease-in-out infinite; 
+      transform-origin: center center;
+    }
+    @keyframes flagTextWave {
+      0% { transform: rotateY(0deg) translateX(0px) translateY(0px); }
+      10% { transform: rotateY(1.5deg) translateX(1px) translateY(-0.5px); }
+      20% { transform: rotateY(4deg) translateX(2.5px) translateY(-1px); }
+      30% { transform: rotateY(6deg) translateX(4px) translateY(-0.5px); }
+      40% { transform: rotateY(7.5deg) translateX(5px) translateY(0px); }
+      50% { transform: rotateY(6deg) translateX(4px) translateY(0.5px); }
+      60% { transform: rotateY(3deg) translateX(2px) translateY(1px); }
+      70% { transform: rotateY(-1deg) translateX(-0.5px) translateY(0.5px); }
+      80% { transform: rotateY(-4deg) translateX(-2px) translateY(0px); }
+      90% { transform: rotateY(-2.5deg) translateX(-1px) translateY(-0.5px); }
+      100% { transform: rotateY(0deg) translateX(0px) translateY(0px); }
+    }
+
+    @keyframes flagWaveHorizontal {
+      0% {
+        transform: rotateY(0deg) skewX(0deg);
+        filter: brightness(1);
+      }
+      10% {
+        transform: rotateY(3deg) skewX(1deg);
+        filter: brightness(1.02);
+      }
+      20% {
+        transform: rotateY(8deg) skewX(2deg);
+        filter: brightness(1.04);
+      }
+      30% {
+        transform: rotateY(12deg) skewX(3deg);
+        filter: brightness(1.06);
+      }
+      40% {
+        transform: rotateY(15deg) skewX(2deg);
+        filter: brightness(1.05);
+      }
+      50% {
+        transform: rotateY(12deg) skewX(1deg);
+        filter: brightness(1.03);
+      }
+      60% {
+        transform: rotateY(6deg) skewX(0.5deg);
+        filter: brightness(1.01);
+      }
+      70% {
+        transform: rotateY(-2deg) skewX(-0.5deg);
+        filter: brightness(1);
+      }
+      80% {
+        transform: rotateY(-8deg) skewX(-1deg);
+        filter: brightness(1.02);
+      }
+      90% {
+        transform: rotateY(-5deg) skewX(-0.5deg);
+        filter: brightness(1.01);
+      }
+      100% {
+        transform: rotateY(0deg) skewX(0deg);
+        filter: brightness(1);
+      }
+    }
+    #flagFabric { animation: flagWaveHorizontal 4s ease-in-out infinite; transform-origin: left center; }
+    #flagFabric::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 15% 25%, rgba(255,255,255,0.15) 1px, transparent 1px),
+        radial-gradient(circle at 85% 75%, rgba(0,0,0,0.08) 1px, transparent 1px),
+        radial-gradient(circle at 45% 60%, rgba(255,255,255,0.12) 1px, transparent 1px),
+        radial-gradient(circle at 75% 15%, rgba(0,0,0,0.06) 1px, transparent 1px),
+        radial-gradient(circle at 25% 85%, rgba(255,255,255,0.09) 1px, transparent 1px),
+        linear-gradient(45deg, transparent 48%, rgba(255,255,255,0.03) 49%, rgba(255,255,255,0.03) 51%, transparent 52%),
+        linear-gradient(-45deg, transparent 48%, rgba(0,0,0,0.02) 49%, rgba(0,0,0,0.02) 51%, transparent 52%);
+      background-size: 20px 20px, 25px 25px, 30px 30px, 18px 18px, 22px 22px, 8px 8px, 8px 8px;
+      pointer-events: none;
+    }
+    @keyframes pulseButton { 0% { transform: scale(1); box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 rgba(255,255,255,0); } 50% { transform: scale(1.03); box-shadow: 0 6px 20px rgba(0,0,0,0.25), 0 0 15px rgba(255,255,255,0.4); background-color: #ffffff; } 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 rgba(255,255,255,0); } }
+  </style>
+  <script>
+  window.getFrameURL = (function(){
+    let cached = null;
+    let promise = null;
+    function process(src){
+      return new Promise(function(resolve, reject){
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function(){
+          const w = img.naturalWidth || img.width;
+          const h = img.naturalHeight || img.height;
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img,0,0);
+          const im = ctx.getImageData(0,0,w,h);
+          const d = im.data;
+          const thr = 22;
+          const mX = Math.round(0.09*w);
+          const mY = Math.round(0.11*h);
+          for (let y=0; y<h; y++){
+            for (let x=0; x<w; x++){
+              const idx = (y*w + x) * 4;
+              const r = d[idx], g = d[idx+1], b = d[idx+2];
+              const edge = Math.min(x, y, w-1-x, h-1-y);
+              if (edge < Math.max(mX, mY)){
+                const dark = (r+g+b)/3 < thr;
+                if (dark){
+                  const scale = Math.max(0, Math.min(1, edge / Math.max(mX, mY)));
+                  d[idx+3] = Math.round(d[idx+3] * scale);
+                }
+              }
+            }
+          }
+          ctx.putImageData(im,0,0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = function(){ reject(new Error('frame error')); };
+        img.src = src;
+      });
+    }
+    return async function(){
+      if (cached) return cached;
+      if (!promise) promise = process('pizarron.png').catch(function(){ return null; });
+      cached = await promise;
+      return cached;
+    };
+  })();
+  </script>
+</head>
+<body>
+  <div id="splash">
+    <div class="circle-bounce">
+      <div class="la-raiz">LA RAÍZ</div>
+      <div class="agrupacion">Agrupación docente</div>
+    </div>
+  </div>
+  <div class="splash-texts-container">
+    <div class="splash-title">Mapa de escuelas</div>
+    <div class="splash-subtitle">La Plata, Berisso y Ensenada</div>
+    <div class="btn-container">
+      <button class="splash-btn" id="startBtn" onclick="try{ startApp(); }catch(e){ try{ var s=document.getElementById('splash'); var m=document.getElementById('mainApp'); if(s) s.style.display='none'; if(m) m.style.display='block'; setTimeout(function(){ try{ map.invalidateSize(); }catch(_){ } }, 200); }catch(_){ } }"><span>Realice su consulta</span></button>
+    </div>
+  </div>
+    <div id="easterEgg" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:260px;background:#fff;border-radius:50%;box-shadow:0 0 40px 8px #fff8, 0 8px 32px #0006;z-index:2000;align-items:center;justify-content:center;color:#222;pointer-events:none;overflow:hidden;">
+      <div style="display:grid;place-items:center;box-sizing:border-box;width:92%;height:92%;padding:0 10px;text-align:center;font-weight:bold;font-size:1.7em;letter-spacing:0.6px;gap:10px;line-height:1.2;color:#d0002a;text-shadow:0 2px 10px rgba(0,0,0,0.25),0 1px 4px rgba(255,255,255,0.6);">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+          <span>😊</span>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <span>Creado</span>
+            <span>por Emanuel Alvarez</span>
+          </div>
+          <span>🤪</span>
+        </div>
+      </div>
+    </div>
+      <div id="flagContainer">
+        <div id="flagPoleLeft"></div>
+        <div id="flagPoleRight"></div>
+        <div id="flagFabric">
+          <div id="flagText">La Raíz</div>
+        </div>
+
+      </div>
+  </div>
+  <div id="mainApp">
+    <div id="topbar">
+      <button id="filtersBtn" class="menu-btn" title="Mostrar/ocultar filtros">VER MENÚ</button>
+      <div id="brand-raiz">La Raíz</div>
+      <div id="brandBadge"></div>
+    </div>
+    <div id="admin-panel" style="display:none">
+      <div id="filtersHeader"></div>
+      <div id="filtersPanel">
+        <input id="searchInput" type="text" placeholder="Buscar por nombre, clave, cueanexo">
+        <select id="filterDistrito">
+          <option value="">Todos los distritos</option>
+          <option value="La Plata">La Plata</option>
+          <option value="Berisso">Berisso</option>
+          <option value="Ensenada">Ensenada</option>
+        </select>
+        <select id="filterLocalidad" style="display:none"></select>
+        <div id="counterWrap">
+          <button id="toggleBoundariesVisibilityBtn" title="Mostrar/ocultar límites">◫</button>
+          <span id="counter" title="Cantidad de resultados">0</span>
+        </div>
+        <button id="geojsonEditModeBtn" title="Modo edición GeoJSON">⤡</button>
+      </div>
+      <div id="filterLevelPanel" class="panel-flotante collapsed">
+        <div id="panelHeader">
+          <button id="togglePanelBtn">☰ Niveles</button>
+          <span class="panel-hint">⬅ SELECCIONAR NIVEL</span>
+        </div>
+        <div id="panelContent" class="hidden"></div>
+        <div id="panelResizer" title="Redimensionar panel">⇲</div>
+      </div>
+    </div>
+    <div id="map"></div>
+  </div>
+  <script src="leaflet.js?v=15"></script>
+  <script>
+    var map = null;
+    var allSchools = [];
+    var markers = [];
+    var municipioGeomByName = {};
+    var boundaryLayers = [];
+    var localityBoundariesLoaded = false;
+    function startApp(){ var s=document.getElementById('splash'); var t=document.querySelector('.splash-texts-container'); var m=document.getElementById('mainApp'); var f=document.getElementById('flagContainer'); var e=document.getElementById('easterEgg'); if(s) s.style.display='none'; if(t) t.style.display='none'; if(f) f.style.display='none'; if(e) e.style.display='none'; if(m) m.style.display='block'; window.inSplashScreen=false; setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 350); }
+    (function(){ var clickCount=0; var hideTimer=null; var circle=document.querySelector('.circle-bounce'); var btn=document.getElementById('startBtn'); function isOutside(t){ return !(circle&&circle.contains(t)) && !(btn&&btn.contains(t)); } function isInSplash(){ return window.inSplashScreen!==false; } function showEgg(){ var egg=document.getElementById('easterEgg'); if(!egg) return; egg.style.display='flex'; if(hideTimer) clearTimeout(hideTimer); hideTimer=setTimeout(function(){ egg.style.display='none'; }, 4000); } function showFlag(){ var flag=document.getElementById('flagContainer'); var circle=document.querySelector('.circle-bounce'); if(!flag || !circle) return; circle.style.display='none'; flag.style.display='block'; flag.style.bottom='39%'; flag.style.left='50%'; flag.style.transform='translate(-50%, 0)'; flag.style.top='auto'; if(hideTimer) clearTimeout(hideTimer); } function hideFlag(){ var flag=document.getElementById('flagContainer'); var circle=document.querySelector('.circle-bounce'); if(!flag || !circle) return; flag.style.display='none'; circle.style.display='flex'; if(hideTimer) clearTimeout(hideTimer); } document.addEventListener('click', function(e){ if(!isInSplash()) return; if(isOutside(e.target)){ clickCount++; if(clickCount>=7){ clickCount=0; showEgg(); } } else { clickCount=0; } }, true); var circleElement=document.querySelector('.circle-bounce'); if(circleElement){ circleElement.addEventListener('dblclick', function(e){ if(!isInSplash()) return; e.stopPropagation(); showFlag(); }); } var flagElement=document.getElementById('flagContainer'); if(flagElement){ flagElement.addEventListener('click', function(e){ e.stopPropagation(); hideFlag(); }); } })();
+    document.getElementById('startBtn').addEventListener('click', startApp);
+    
+
+    
+    map = L.map('map').setView([-34.921, -57.954], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(map);
+    map.createPane('boundariesGlowPane'); map.getPane('boundariesGlowPane').style.zIndex = 340;
+    map.createPane('boundariesPane'); map.getPane('boundariesPane').style.zIndex = 341;
+    map.createPane('localitiesGlowPane'); map.getPane('localitiesGlowPane').style.zIndex = 330;
+    map.createPane('localitiesPane'); map.getPane('localitiesPane').style.zIndex = 331;
+    map.createPane('railwaysPane'); map.getPane('railwaysPane').style.zIndex = 332;
+    function normalizeLocalidadName(s){ if(!s) return ''; var t=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' '); var m={ 'josé melchor romero':'melchor romero','jose melchor romero':'melchor romero','melchor romero':'melchor romero','villa montoro':'villa elvira','la cumbre':'san carlos' }; var canon=m[t]||t; return canon.replace(/(^|\s)\S/g,function(x){ return x.toUpperCase(); }); }
+    function getColorByLevel(n){ if(!n) return '#757575'; var s=n.toLowerCase(); if(s.includes('inicial')) return '#0074D9'; if(s.includes('primaria')) return '#2ECC40'; if(s.includes('secundaria')) return '#FF4136'; if(s.includes('superior')) return '#FFDC00'; if(s.includes('artística')) return '#B10DC9'; if(s.includes('técnicas y agrarias')) return '#3D9970'; if(s.includes('técnica')) return '#FF851B'; if(s.includes('ciclo medio')) return '#7FDBFF'; if(s.includes('ciclo de iniciación')) return '#39CCCC'; if(s.includes('cursos y talleres')) return '#F012BE'; if(s.includes('adultos')) return '#8E44AD'; if(s.includes('jardín maternal')||s.includes('jardin maternal')) return '#3399FF'; var h=0; for(var i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return 'hsl('+(h%360)+', 70%, 55%)'; }
+    function clearMarkers(){ markers.forEach(function(m){ map.removeLayer(m); }); markers=[]; }
+    function renderMarkers(arr){ var a=Array.isArray(arr)?arr:[]; clearMarkers(); a.forEach(function(f){ try{ var p=f.properties||{}; var lat=NaN,lng=NaN; if(f.geometry&&Array.isArray(f.geometry.coordinates)){ lng=Number(f.geometry.coordinates[0]); lat=Number(f.geometry.coordinates[1]); } if(isNaN(lat)||isNaN(lng)){ lat=Number(p.latitud||p.lat||p.latitude); lng=Number(p.longitud||p.lng||p.longitude); } if(isNaN(lat)||isNaN(lng)) return; var nivel=(p.nivel||''); var nombreStr=String(p.nombre||''); var tipoStr=String(p.tipo_organizacion||''); var color=getColorByLevel(nivel); if(nombreStr.includes('adultos')||nombreStr.includes('Adultos')||nombreStr.includes('ADULTOS')){ color='#8E44AD'; } if( nombreStr.includes('JARDÍN MATERNAL')||nombreStr.includes('JARDIN MATERNAL')||nombreStr.includes('Jardín Maternal')||nombreStr.includes('Jardin Maternal')|| tipoStr.includes('JARDÍN MATERNAL')||tipoStr.includes('JARDIN MATERNAL') ){ color='#3399FF'; } var m=L.circleMarker([lat,lng],{ color:color, fillColor:color, radius:12, weight:3, fillOpacity:0.85, opacity:1 }).addTo(map);
+        var toUp=function(x){ return String(x||'').toLocaleUpperCase('es-ES'); };
+        var datosHtml="<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar imagen'>⬇</button><div class='frame-content'>";
+        datosHtml += "<div class='name-tag'>"+escapeHtml(String(p.nombre||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>NÚMERO DE ESCUELA:</b> "+escapeHtml(String(p.nro_escuela||''))+"</div>";
+        var dirVal = String(p.calle||''); var puerta = String(p.numero||'').trim(); if(puerta){ dirVal = dirVal ? (dirVal + ' ' + puerta) : puerta; }
+        datosHtml += "<div class='field-line'><b>DIRECCIÓN:</b> "+escapeHtml(dirVal)+"</div>";
+        datosHtml += "<div class='field-line'><b>CÓMO LLEGO:</b> "+escapeHtml(String(p['COMO LLEGO']||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>DESFAVORABILIDAD:</b> "+escapeHtml(String(p.desfavorabilidad||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>DISTRITO:</b> "+escapeHtml(String(p.distrito||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>LOCALIDAD:</b> "+escapeHtml(String(p.localidad||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>NIVEL:</b> "+escapeHtml(String(p.nivel||''))+"</div>";
+        datosHtml += "<div class='field-line'><b>CLAVE:</b> "+escapeHtml(String(p.clave||''))+"</div>";
+        datosHtml += "</div></div>"; m.bindPopup(datosHtml);
+        m.on('popupopen', function(){ try{ var w=window.innerWidth||1024; if(w<=600){ var admin=document.getElementById('admin-panel'); if(admin && window.adminPanelOpen){ window.adminPanelOpen=false; admin.style.display='none'; } } }catch(e){} var content=document.querySelector('.leaflet-popup-content'); if(!content) return; var frame=content.querySelector('.popup-frame'); var imgEl=content.querySelector('.frame-img'); if(frame && imgEl){ imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} }; if(window.getFrameURL){ window.getFrameURL().then(function(url){ if(url) imgEl.src=url; }); } }
+            var frameContent=content.querySelector('.frame-content'); if(frameContent){ var scrollTimeout=null; frameContent.addEventListener('scroll', function(){ if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(function(){ var ultimoCompleto=null; Array.prototype.forEach.call(frameContent.children, function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight; if(frameContent.scrollTop !== nuevoScroll){ frameContent.scrollTop = nuevoScroll; } } }, 120); }); }
+            var dlBtn=content.querySelector('.popup-dl-btn'); if(dlBtn){ dlBtn.onclick = async function(ev){ ev.stopPropagation(); var targetFrame=content.querySelector('.popup-frame'); if(!targetFrame) return; var fc=targetFrame.querySelector('.frame-content'); if(!fc) return; var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)); var scaleVal=isMobile?1.25:2; var originalScroll=fc.scrollTop; fc.scrollTop=0; var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); fc.scrollTop = originalScroll; var piz = new Image(); piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png'; piz.onload = function(){ var width=piz.width, height=piz.height; var finalCanvas=document.createElement('canvas'); finalCanvas.width=width; finalCanvas.height=height; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(piz,0,0,width,height); ctx.drawImage(visibleCanvas,0,0,width,height); finalCanvas.toBlob(function(blob){ var url=URL.createObjectURL(blob); var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg'; var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent); if(isIOS){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } }, 'image/jpeg', 0.92); }; };
+            }
+        }); markers.push(m); }catch(e){} }); var c=document.getElementById('counter'); if(c) c.textContent=String(a.length); }
+    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var levelAll=null; var levelChecks=[];
+    function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g,function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]; }); }
+    function updateLevelsBadgeCount(){ var btn=document.getElementById('levelsHeaderBtn'); if(!btn) return; var total=Array.isArray(levelChecks)?levelChecks.length:0; var count=(levelAll && levelAll.checked) ? total : levelChecks.filter(function(cb){ return cb.checked; }).length; btn.setAttribute('data-count', String(count)); }
+    function populateLocalities(){ var distrito=(distritoSelect.value||'').trim(); if(!distrito){ localidadSelect.style.display='none'; return; } var base=getBaseFeatures(); var locSet=new Set(); var hasLaPlata=false; base.forEach(function(f){ var p=f.properties||{}; if((p.distrito||'').trim()===distrito){ var canon=(p.localidad_norm||normalizeLocalidadName(p.localidad||'')); if(canon){ if(canon==='La Plata') hasLaPlata=true; locSet.add(canon); } } }); var list=Array.from(locSet).sort(function(a,b){ return a.localeCompare(b,'es'); }); localidadSelect.innerHTML=''; var opt=document.createElement('option'); opt.value=''; opt.textContent='Todas las localidades'; localidadSelect.appendChild(opt); if(distrito==='La Plata'&&hasLaPlata){ var cascoOpt=document.createElement('option'); cascoOpt.value='Casco Urbano'; cascoOpt.textContent='Casco Urbano'; localidadSelect.appendChild(cascoOpt); }
+      list.forEach(function(l){ var ln=l.trim().toLowerCase(); if(distrito==='La Plata' && ln==='la plata') return; var o=document.createElement('option'); if(ln==='san carlos'){ o.value='SAN CARLOS'; o.textContent='SAN CARLOS'; } else { o.value=l; o.textContent=l; } localidadSelect.appendChild(o); }); localidadSelect.style.display=''; }
+    function getBaseFeatures(){ return allSchools.map(function(f){ var p=f.properties||{}; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; }); }
+    function filterSchools(){ var text=(searchInput.value||'').trim().toLowerCase(); var distrito=distritoSelect.value||''; var localidad=(localidadSelect&&localidadSelect.value)||''; var base=getBaseFeatures();
+      function normStr(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase(); }
+      var levelAllChecked = !!(document.getElementById('levelAll') && document.getElementById('levelAll').checked);
+      var selectedLevels = Array.isArray(levelChecks) ? levelChecks.filter(function(cb){ return cb.checked; }).map(function(cb){ return cb.value; }) : [];
+      var tecnicaSolo = (!levelAllChecked && selectedLevels.length===1 && selectedLevels[0]==='Técnica');
+      var filtered = base.slice();
+      if(!levelAllChecked){ if(selectedLevels.length===0){ filtered = []; } else if(tecnicaSolo){ filtered = filtered.filter(function(f){ return (f.properties && f.properties.nombre)==='escuela de educacion tecnica'; }); } else { var selectedNorms = selectedLevels.map(normStr); filtered = filtered.filter(function(f){ var p=f.properties||{}; var n=normStr(p.nivel||''); var torg=(p.tipo_organizacion||''); var tecnAgraSel=normStr('Técnicas y Agrarias'); var adultosSel=normStr('ADULTOS'); var jardinMatSel=normStr('JARDIN MATERNAL'); var nombreVal=(p.nombre||''); var agrariaName=nombreVal.includes('ESCUELA DE EDUCACIÓN SECUNDARIA AGRARIA'); var adultosName=nombreVal.includes('adultos')||nombreVal.includes('Adultos')||nombreVal.includes('ADULTOS'); var jmName=nombreVal.includes('JARDÍN MATERNAL')||nombreVal.includes('JARDIN MATERNAL')||nombreVal.includes('Jardín Maternal')||nombreVal.includes('Jardin Maternal'); var inicialSel=normStr('Nivel Inicial'); return selectedNorms.some(function(l){ if(adultosName){ return l===adultosSel; } if(agrariaName){ return l===tecnAgraSel; } if(l===jardinMatSel){ return jmName; } if(l==='artistica'){ return n.includes('artistica')||n.includes('ciclo medio'); } if(l===tecnAgraSel){ return torg==='ESCUELA DE EDUCACIÓN SECUNDARIA TÉCNICA' || torg==='ESCUELA DE EDUCACIÓN SECUNDARIA AGRARIA' || (p.nivel||'')==='AGRARIA' || n==='centro de educacion agraria'; } if(l===inicialSel){ return n.includes(l) && !jmName; } return n.includes(l); }); }); } }
+      if(distrito){ filtered = filtered.filter(function(f){ return (f.properties&&f.properties.distrito||'')===distrito; }); }
+      if(localidad){ var locSel = localidad.trim().toLowerCase(); if(locSel==='casco urbano'){ filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()==='la plata'; }); } else { filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()===locSel; }); } }
+      if(text){ filtered = filtered.filter(function(f){ var p=f.properties||{}; return (p.nombre||'').toLowerCase().includes(text) || (p.numero||'').toString().toLowerCase().includes(text) || (p.nivel||'').toLowerCase().includes(text) || (p.localidad||'').toLowerCase().includes(text) || (p.localidad_norm||'').toLowerCase().includes(text); }); }
+      clearMarkers(); renderMarkers(filtered); var c=document.getElementById('counter'); if(c) c.textContent=filtered.length; updateLevelsBadgeCount(); }
+    distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); }); } searchInput.addEventListener('input', filterSchools);
+    function isPolygonGeojson(g){ return !!g && (g.type==='Polygon' || g.type==='MultiPolygon'); }
+    function addBoundaryGeoJSON(geojson){ try{ var glow=L.geoJSON(geojson,{ pane:'boundariesGlowPane', color:'#ff0033', weight:28, opacity:0.22, fill:false }).addTo(map); var sharp=L.geoJSON(geojson,{ pane:'boundariesPane', color:'#ff0033', weight:3, opacity:0.9, fill:false }).addTo(map); boundaryLayers.push(glow); boundaryLayers.push(sharp); }catch(e){} }
+    function tryLoadMunicipalBoundaries(){ return fetch('municipios_boundaries.geojson').then(function(r){ if(!r||!r.ok) return null; return r.json(); }).then(function(gj){ if(!gj) return false; var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; var n=f&&f.properties&&f.properties.name; if(g&&isPolygonGeojson(g)){ municipioGeomByName[(n||'').toLowerCase()]=g; } }); Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); return true; }).catch(function(){ return false; }); }
+    var boundariesHidden=false; var railwayLayers=[]; var localityLayers=[]; var cachedLocalitiesLP=null;
+    function clearBoundaryLayers(){ try{ boundaryLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); boundaryLayers=[]; }catch(e){} }
+    function clearLocalityLayers(){ try{ localityLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); localityLayers=[]; }catch(e){} }
+    function setBoundariesHidden(h){ boundariesHidden=!!h; var btn=document.getElementById('toggleBoundariesVisibilityBtn'); if(btn){ btn.title = boundariesHidden ? 'Mostrar límites' : 'Ocultar límites'; } updateDisplayForSelectedDistrict(); }
+    function tryLoadLocalBoundaryLines(){ return fetch('localidades_limites_lineas.geojson', { cache:'no-store' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(g&&g.type==='LineString'&&Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var layer=L.polyline(latlngs,{ pane:'railwaysPane', color:'#0062cc', weight:2, opacity:0.9 }); railwayLayers.push(layer); } }); return true; }).catch(function(){ return false; }); }
+    function addLocalityBoundariesLaPlata(){ if(Array.isArray(cachedLocalitiesLP)){ cachedLocalitiesLP.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#0062cc', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.8, fill:false }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.9 }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); return Promise.resolve(true); }
+      return fetch('localidades_la_plata.geojson', { cache:'force-cache' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#0062cc', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.8, fill:false }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.9 }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); cachedLocalitiesLP=feats; return true; }).catch(function(){ return false; }); }
+    function updateDisplayForSelectedDistrict(){ try{ clearBoundaryLayers(); clearLocalityLayers(); if(boundariesHidden){ railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); return; } var dist=(distritoSelect&&distritoSelect.value)||''; var distKey=(dist||'').trim().toLowerCase(); if(!distKey){ Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='la plata'){ if(municipioGeomByName['la plata']) addBoundaryGeoJSON(municipioGeomByName['la plata']); railwayLayers.forEach(function(l){ try{ l.addTo(map); }catch(e){} }); addLocalityBoundariesLaPlata(); } else if(distKey==='berisso'){ if(municipioGeomByName['berisso']) addBoundaryGeoJSON(municipioGeomByName['berisso']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='ensenada'){ if(municipioGeomByName['ensenada']) addBoundaryGeoJSON(municipioGeomByName['ensenada']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } }catch(e){} }
+    fetch('camposfiltrados.geojson').then(function(r){ return r.ok?r.text():Promise.resolve('{}'); }).then(function(text){ var data; try{ data=JSON.parse(text); }catch(_){ data={ features:[] }; } if(!data||!data.features) data={ features:[] }; allSchools=data.features.map(function(f){ var p=f.properties||{}; var hasGeom=f.geometry&&Array.isArray(f.geometry.coordinates); var lat=hasGeom?Number(f.geometry.coordinates[1]):Number(p.latitud||p.lat||p.latitude); var lng=hasGeom?Number(f.geometry.coordinates[0]):Number(p.longitud||p.lng||p.longitude); if(isNaN(lat)||isNaN(lng)){ var canon=normalizeLocalidadName(p.localidad||''); lat=-34.92; lng=-57.95; } f.geometry={ type:'Point', coordinates:[lng,lat] }; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; });
+      var nivelesUnicos = Array.from(new Set(allSchools.map(function(e){ return (e.properties&&e.properties.nivel||'').trim(); }))).filter(function(n){ return n; });
+      function normStr(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase(); }
+      var nivelesLower = new Set(nivelesUnicos.map(function(n){ return normStr(n); }));
+      var nivelesFiltrados = nivelesUnicos.filter(function(n){ var nn=normStr(n); if(nn.includes('psicologia comunitaria y pedagogia social')) return false; return nn!=='ciclo medio' && nn!=='centro de educacion agricola' && nn!=='centro de educacion agraria' && nn!=='agraria' && nn!=='modalidad: psicologia comunitaria y pedagogia social' && nn!=='nivenl secundario'; });
+      if(!nivelesLower.has(normStr('Artística'))) nivelesFiltrados.push('Artística');
+      if(!nivelesLower.has(normStr('Técnicas y Agrarias'))) nivelesFiltrados.push('Técnicas y Agrarias');
+      if(!nivelesLower.has(normStr('ADULTOS'))) nivelesFiltrados.push('ADULTOS');
+      if(!nivelesLower.has(normStr('JARDIN MATERNAL'))) nivelesFiltrados.push('JARDIN MATERNAL');
+      var orden = ['NIVEL INICIAL','JARDIN MATERNAL','NIVEL PRIMARIO','NIVEL SECUNDARIO','TÉCNICAS Y AGRARIAS','ARTÍSTICA','FORMACIÓN INTEGRAL','ADULTOS','EDUCACIÓN FÍSICA (C.E.F.)','NIVEL SUPERIOR','FORMACIÓN PROFESIONAL'];
+      var ordenMap = new Map(orden.map(function(n,i){ return [normStr(n), i]; }));
+      nivelesFiltrados.sort(function(a,b){ var ia=ordenMap.has(normStr(a))?ordenMap.get(normStr(a)):Number.MAX_SAFE_INTEGER; var ib=ordenMap.has(normStr(b))?ordenMap.get(normStr(b)):Number.MAX_SAFE_INTEGER; if(ia!==ib) return ia-ib; return normStr(a).localeCompare(normStr(b)); });
+      var panelContent=document.getElementById('panelContent'); panelContent.innerHTML='';
+      var allLabel=document.createElement('label'); allLabel.className='levels-all'; var allCb=document.createElement('input'); allCb.type='checkbox'; allCb.id='levelAll'; allCb.checked=true; allLabel.appendChild(allCb); allLabel.appendChild(document.createTextNode(' Todos los niveles')); panelContent.appendChild(allLabel);
+      nivelesFiltrados.forEach(function(nivel){ var label=document.createElement('label'); var cb=document.createElement('input'); cb.type='checkbox'; cb.className='levelCheck'; cb.value=nivel; cb.checked=true; var color=getColorByLevel(nivel); label.style.borderLeft='12px solid '+color; label.style.paddingLeft='8px'; label.appendChild(cb); var normNivel=normStr(nivel); var displayName=(normNivel===normStr('PLAN FINES (TRAYECTOS Y DEUDORES)'))?'CENS':nivel.toUpperCase(); label.appendChild(document.createTextNode(' '+displayName)); panelContent.appendChild(label); });
+      levelAll=document.getElementById('levelAll'); levelChecks=Array.from(document.querySelectorAll('.levelCheck'));
+      if(levelAll){ levelAll.addEventListener('change', function(){ var v=levelAll.checked; levelChecks.forEach(function(cb){ cb.checked=v; }); filterSchools(); updateLevelsBadgeCount(); }); }
+      levelChecks.forEach(function(cb){ cb.addEventListener('change', function(e){ e.stopPropagation(); if(!cb.checked){ if(levelAll) levelAll.checked=false; } else if(levelAll && levelChecks.every(function(c){ return c.checked; })){ levelAll.checked=true; } filterSchools(); updateLevelsBadgeCount(); }); });
+      populateLocalities(); renderMarkers(allSchools); updateLevelsBadgeCount(); filterSchools(); tryLoadMunicipalBoundaries().then(function(ok){ if(ok){ try{ var fc={ type:'FeatureCollection', features:[] }; ['la plata','berisso','ensenada'].forEach(function(n){ var g=municipioGeomByName[n]; if(g){ fc.features.push({ type:'Feature', geometry:g }); } }); }catch(e){} } }); tryLoadLocalBoundaryLines().then(function(){ updateDisplayForSelectedDistrict(); }); applyPanelPosition(); });
+    function applyPanelPosition(){ var panel=document.getElementById('filterLevelPanel'); var content=document.getElementById('panelContent'); var topbar=document.getElementById('topbar'); var admin=document.getElementById('admin-panel'); if(!panel) return; var th= topbar ? topbar.offsetHeight : 0; var adminVisible = admin && window.getComputedStyle(admin).display !== 'none'; var ah= adminVisible ? (admin.offsetHeight || 0) : 0; var offset = (th + ah + 8); panel.style.top = offset + 'px'; try{ document.documentElement.style.setProperty('--controls-top', offset + 'px'); }catch(e){} }
+    (function(){ var btn=document.getElementById('togglePanelBtn'); var content=document.getElementById('panelContent'); var panel=document.getElementById('filterLevelPanel'); var levelsBtn=document.getElementById('levelsHeaderBtn'); function openLevelsPanel(){ if(panel) panel.classList.remove('collapsed'); if(content) content.classList.remove('hidden'); applyPanelPosition(); } function closeLevelsPanel(){ if(content) content.classList.add('hidden'); if(panel) panel.classList.add('collapsed'); } function toggleLevelsPanel(){ var isClosed = !panel || panel.classList.contains('collapsed') || (content && content.classList.contains('hidden')); if(isClosed){ openLevelsPanel(); } else { closeLevelsPanel(); } } if(btn){ btn.addEventListener('click', toggleLevelsPanel); } if(levelsBtn){ levelsBtn.addEventListener('click', toggleLevelsPanel); } var filtersBtn=document.getElementById('filtersHeaderBtn'); var filtersTopBtn=document.getElementById('filtersBtn'); var admin=document.getElementById('admin-panel'); function updateFiltersText(){ if(!filtersTopBtn||!admin) return; var visible = window.getComputedStyle(admin).display !== 'none'; filtersTopBtn.textContent = visible ? 'OCULTAR MENÚ' : 'VER MENÚ'; if(visible){ filtersTopBtn.classList.add('is-hide'); } else { filtersTopBtn.classList.remove('is-hide'); } } function toggleAdmin(){ if(!admin) return; admin.style.display = (admin.style.display==='none') ? '' : 'none'; closeLevelsPanel(); applyPanelPosition(); updateFiltersText(); } if(filtersBtn){ filtersBtn.addEventListener('click', toggleAdmin); } if(filtersTopBtn){ filtersTopBtn.addEventListener('click', toggleAdmin); } var toggleBoundariesBtn=document.getElementById('toggleBoundariesVisibilityBtn'); if(toggleBoundariesBtn){ toggleBoundariesBtn.addEventListener('click', function(){ setBoundariesHidden(!boundariesHidden); }); } window.addEventListener('resize', applyPanelPosition); document.getElementById('startBtn').addEventListener('click', function(){ applyPanelPosition(); closeLevelsPanel(); updateFiltersText(); }); updateFiltersText(); })();
+  </script>
+</body>
+</html>
