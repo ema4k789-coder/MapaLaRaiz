@@ -1,0 +1,5 @@
+exclude:
+  - README.md
+  - .gitignore
+  - .github/workflows/deploy.yml
+  - test_*.html
