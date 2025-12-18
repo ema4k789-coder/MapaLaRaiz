@@ -439,14 +439,27 @@ else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelB
         datosHtml += `<div class='field-line'><b>${clave}:</b> ${props[clave]}</div>`;
       }
     }
-datosHtml += `</div></div>`;
-marker.bindPopup(datosHtml);
+    datosHtml += `</div><button type='button' class='popup-volver-btn'>VOLVER</button></div>`;
+    marker.bindPopup(datosHtml, { closeButton: false, autoClose: true, closeOnClick: true });
   marker.on('popupopen', function() {
     try{
       const w = window.innerWidth || 1024;
       if (w <= 600) {
+        // Cerrar panel de filtros principal
+        const panel = document.getElementById('filterLevelPanel');
+        const panelContent = document.getElementById('panelContent');
+        if (panel && !panel.classList.contains('collapsed')) {
+          panel.classList.add('collapsed');
+        }
+        if (panelContent && !panelContent.classList.contains('hidden')) {
+          panelContent.classList.add('hidden');
+        }
+        // Cerrar admin panel
         const admin = document.getElementById('admin-panel');
-        if (admin && window.adminPanelOpen) { window.adminPanelOpen = false; admin.style.display = 'none'; }
+        if (admin && window.getComputedStyle(admin).display !== 'none') { 
+          window.adminPanelOpen = false; 
+          admin.style.display = 'none'; 
+        }
       }
     }catch(e){}
     const content = document.querySelector('.leaflet-popup-content');
@@ -548,7 +561,13 @@ marker.bindPopup(datosHtml);
             }, 'image/jpeg', 0.92);
           };
         };
-
+      }
+      const volverBtn = content.querySelector('.popup-volver-btn');
+      if (volverBtn) {
+        volverBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          map.closePopup();
+        };
       }
     });
     markers.push(marker);

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST BOTÓN VOLVER - DEBUG EN VIVO</title>
+    <link rel="stylesheet" href="leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="simple_popup.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; }
+        #map { height: 100vh; width: 100%; }
+        .debug-panel {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            max-width: 400px;
+            z-index: 10000;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .debug-log {
+            margin: 3px 0;
+            padding: 3px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .error { color: #ff6b6b; background: rgba(255,0,0,0.2); }
+        .success { color: #51cf66; background: rgba(0,255,0,0.2); }
+        .warning { color: #ffd43b; background: rgba(255,255,0,0.2); }
+        button { margin: 5px; padding: 8px 12px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="debug-panel">
+        <h3>🔍 DEBUG BOTÓN VOLVER</h3>
+        <div id="debug-log"></div>
+        <button onclick="forceTestPopup()">🧪 CREAR POPUP TEST</button>
+        <button onclick="clearLog()">🗑️ LIMPIAR</button>
+        <button onclick="checkCurrentWidth()">📏 VER ANCHO</button>
+    </div>
+
+    <script src="leaflet.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Sistema de logging
+        function debugLog(message, type = 'info') {
+            const log = document.getElementById('debug-log');
+            const div = document.createElement('div');
+            div.className = 'debug-log ' + type;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('debug-log').innerHTML = '';
+        }
+
+        function checkCurrentWidth() {
+            debugLog(`📏 Ancho actual: ${window.innerWidth}px`, 'info');
+            debugLog(`📱 ¿Modo móvil? ${window.innerWidth <= 600}`, window.innerWidth <= 600 ? 'success' : 'warning');
+        }
+
+        // INTERCEPTAR bindPopup para verificar HTML generado
+        const originalBindPopup = L.Marker.prototype.bindPopup;
+        L.Marker.prototype.bindPopup = function(content, options) {
+            debugLog(`🎯 bindPopup llamado`, 'info');
+            debugLog(`📏 Ancho en bindPopup: ${window.innerWidth}px`, 'info');
+            
+            if (typeof content === 'string') {
+                const hasVolverBtn = content.includes('popup-volver-btn');
+                const hasDlBtn = content.includes('popup-dl-btn');
+                
+                debugLog(`🎨 HTML generado:`, hasVolverBtn ? 'success' : 'error');
+                debugLog(`   - ¿Tiene VOLVER? ${hasVolverBtn ? '✅ SÍ' : '❌ NO'}`, hasVolverBtn ? 'success' : 'error');
+                debugLog(`   - ¿Tiene DESCARGA? ${hasDlBtn ? '✅ SÍ' : '❌ NO'}`, hasDlBtn ? 'success' : 'warning');
+                
+                // Mostrar fragmento del HTML
+                const htmlPreview = content.substring(0, 300) + (content.length > 300 ? '...' : '');
+                debugLog(`📋 Fragmento HTML: ${htmlPreview}`, 'info');
+                
+                if (window.innerWidth <= 600 && !hasVolverBtn) {
+                    debugLog(`🚨 CRÍTICO: Estás en móvil pero NO hay botón VOLVER`, 'error');
+                }
+            }
+            
+            return originalBindPopup.call(this, content, options);
+        };
+
+        // INTERCEPTAR popupopen para verificar DOM real
+        function setupPopupDebug() {
+            if (typeof map === 'undefined') {
+                debugLog(`⏳ Esperando que map esté disponible...`, 'warning');
+                setTimeout(setupPopupDebug, 500);
+                return;
+            }
+            
+            // Verificar que map sea un objeto Leaflet válido
+            if (!map || typeof map.on !== 'function') {
+                debugLog(`❌ map no es un objeto Leaflet válido`, 'error');
+                debugLog(`🎯 Tipo de map: ${typeof map}`, 'error');
+                debugLog(`📋 map: ${JSON.stringify(map)}`, 'error');
+                return;
+            }
+            
+            debugLog(`✅ Map detectado, configurando debug de popups`, 'success');
+            
+            map.on('popupopen', function(e) {
+            debugLog(`🎉 Evento popupopen disparado`, 'success');
+            
+            setTimeout(() => {
+                const popup = e.popup;
+                const container = popup.getElement();
+                
+                if (!container) {
+                    debugLog(`❌ No se encontró contenedor del popup`, 'error');
+                    return;
+                }
+                
+                debugLog(`📦 Contenedor popup encontrado`, 'success');
+                
+                // Buscar botones específicos
+                const volverBtn = container.querySelector('.popup-volver-btn');
+                const dlBtn = container.querySelector('.popup-dl-btn');
+                const closeBtn = container.querySelector('.leaflet-popup-close-button');
+                
+                debugLog(`🔍 Búsqueda de botones:`, 'info');
+                debugLog(`   - VOLVER: ${volverBtn ? '✅ ENCONTRADO' : '❌ NO ENCONTRADO'}`, volverBtn ? 'success' : 'error');
+                debugLog(`   - DESCARGA: ${dlBtn ? '✅ ENCONTRADO' : '❌ NO ENCONTRADO'}`, dlBtn ? 'success' : 'warning');
+                debugLog(`   - X CLOSE: ${closeBtn ? '✅ ENCONTRADO' : '❌ NO ENCONTRADO'}`, closeBtn ? 'warning' : 'success');
+                
+                if (volverBtn) {
+                    // Verificar estilos computados
+                    const styles = window.getComputedStyle(volverBtn);
+                    debugLog(`🎨 Estilos VOLVER:`, 'info');
+                    debugLog(`   - display: ${styles.display}`, styles.display === 'none' ? 'error' : 'info');
+                    debugLog(`   - visibility: ${styles.visibility}`, styles.visibility === 'hidden' ? 'error' : 'info');
+                    debugLog(`   - opacity: ${styles.opacity}`, styles.opacity === '0' ? 'error' : 'info');
+                    debugLog(`   - z-index: ${styles.zIndex}`, 'info');
+                    debugLog(`   - position: ${styles.position}`, 'info');
+                    debugLog(`   - bottom: ${styles.bottom}`, 'info');
+                    debugLog(`   - left: ${styles.left}`, 'info');
+                    
+                    // Verificar evento click
+                    volverBtn.addEventListener('click', function(ev) {
+                        debugLog(`👆 Click en VOLVER detectado`, 'success');
+                        map.closePopup();
+                    });
+                } else {
+                    debugLog(`🔍 ¿Existe en el DOM? Buscando...`, 'warning');
+                    // Buscar cualquier botón con texto VOLVER
+                    const allButtons = container.querySelectorAll('button');
+                    allButtons.forEach(btn => {
+                        debugLog(`   Botón encontrado: "${btn.textContent}"`, btn.textContent.includes('VOLVER') ? 'warning' : 'info');
+                    });
+                }
+                
+            }, 500); // Esperar más tiempo para asegurar renderizado
+        });
+        }
+        
+        // Iniciar configuración cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupPopupDebug);
+        } else {
+            setupPopupDebug();
+        }
+
+        // Función para crear popup de prueba
+        function forceTestPopup() {
+            debugLog(`🧪 CREANDO POPUP DE PRUEBA...`, 'warning');
+            
+            // Crear marcador de prueba
+            const testMarker = L.marker([-34.5, -58.5]).addTo(map);
+            
+            // HTML de prueba con botón VOLVER
+            const testHtml = `
+                <div class='popup-frame'>
+                    <img class='frame-img' src='pizarron.png' alt=''>
+                    <button class='popup-dl-btn' title='Descargar imagen'>⬇</button>
+                    <button class='popup-volver-btn' title='Volver'>VOLVER</button>
+                    <div class='frame-content'>
+                        <div class='name-tag'>EP 999 - Escuela TEST</div>
+                        <div class='field-line'><b>Nivel:</b> Primaria</div>
+                        <div class='field-line'><b>Número:</b> 999</div>
+                        <div class='field-line'><b>Localidad:</b> Test City</div>
+                    </div>
+                </div>
+            `;
+            
+            testMarker.bindPopup(testHtml, {
+                closeButton: false,
+                className: 'mobile-popup-centered'
+            });
+            
+            testMarker.openPopup();
+            debugLog(`🎯 Popup test creado y abierto`, 'success');
+        }
+
+        // Log inicial
+        debugLog(`🚀 Sistema debug activado`, 'success');
+        checkCurrentWidth();
+        
+        // Forzar modo móvil si es necesario
+        if (window.innerWidth > 600) {
+            debugLog(`⚠️ NO estás en modo móvil. Usa F12 → modo responsive`, 'warning');
+            debugLog(`💡 Selecciona iPhone SE (375px) o similar`, 'warning');
+        }
+        
+        // Auto-verificar cada 5 segundos
+        setInterval(checkCurrentWidth, 5000);
+    </script>
+</body>
+</html>

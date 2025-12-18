@@ -1,0 +1,63 @@
+/* CSS DE EMERGENCIA - FORZAR OCULTAR BOTÓN X Y MOSTRAR VOLVER */
+
+/* FORZAR OCULTAR EL BOTÓN X DE LEAFLET EN MÓVIL - MÁXIMO PRIORIDAD */
+@media (max-width: 600px) and (orientation: portrait) {
+  .leaflet-popup-close-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+  }
+  
+  /* FORZAR MOSTRAR BOTÓN VOLVER - MÁXIMO PRIORIDAD */
+  .popup-volver-btn {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    z-index: 9999 !important;
+    background: rgba(255,255,255,0.95) !important;
+    color: #333 !important;
+    border: 2px solid #000 !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.3) !important;
+    min-width: 60px !important;
+    min-height: 30px !important;
+    text-align: center !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Asegurar que el contenedor del popup permita botones absolutos */
+  .popup-frame {
+    position: relative !important;
+  }
+  
+  /* Asegurar que el wrapper de Leaflet no interfiera */
+  .leaflet-popup-content-wrapper {
+    overflow: visible !important;
+  }
+}
+
+/* FORZAR EN TODOS LOS TAMAÑOS SI ES NECESARIO */
+.popup-volver-btn {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.leaflet-popup-close-button {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}

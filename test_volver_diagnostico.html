@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Diagnóstico Botón VOLVER</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .diagnostico { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .exito { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        #resultados { margin-top: 20px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico Botón VOLVER</h1>
+    
+    <div class="diagnostico">
+        <h3>Instrucciones:</h3>
+        <ol>
+            <li>Abre la consola del navegador (F12)</li>
+            <li>Activa modo móvil (iPhone SE 375px)</li>
+            <li>Toca cualquier punto del mapa</li>
+            <li>Presiona los botones de diagnóstico</li>
+        </ol>
+    </div>
+
+    <button onclick="diagnosticarVolver()">🔍 Diagnosticar VOLVER</button>
+    <button onclick="verHTMLPopup()">📋 Ver HTML del Popup</button>
+    <button onclick="verEstilos()">🎨 Ver Estilos Aplicados</button>
+    <button onclick="forzarVisible()">👁 Forzar Visible</button>
+
+    <div id="resultados"></div>
+
+    <script>
+        function log(mensaje, tipo = 'info') {
+            const resultados = document.getElementById('resultados');
+            const div = document.createElement('div');
+            div.className = `diagnostico ${tipo}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${mensaje}`;
+            resultados.appendChild(div);
+            console.log(`[${tipo.toUpperCase()}] ${mensaje}`);
+        }
+
+        function diagnosticarVolver() {
+            log('Iniciando diagnóstico...', 'info');
+            
+            // Buscar botón VOLVER
+            const volverBtn = document.querySelector('.popup-volver-btn');
+            const volverBtns = document.querySelectorAll('.popup-volver-btn');
+            
+            log(`Botones VOLVER encontrados: ${volverBtns.length}`, volverBtns.length > 0 ? 'exito' : 'error');
+            
+            if (volverBtn) {
+                log('✅ Botón VOLVER existe en DOM', 'exito');
+                
+                // Verificar estilos
+                const estilos = window.getComputedStyle(volverBtn);
+                log(`Display: ${estilos.display}`, estilos.display !== 'none' ? 'exito' : 'error');
+                log(`Visibility: ${estilos.visibility}`, estilos.visibility !== 'hidden' ? 'exito' : 'error');
+                log(`Opacity: ${estilos.opacity}`, estilos.opacity > 0 ? 'exito' : 'error');
+                log(`Position: ${estilos.position}`, 'info');
+                log(`Top: ${estilos.top}`, 'info');
+                log(`Left: ${estilos.left}`, 'info');
+                log(`Z-index: ${estilos.zIndex}`, 'info');
+                
+                // Verificar evento
+                log(`Tiene evento onclick: ${typeof volverBtn.onclick === 'function'}`, typeof volverBtn.onclick === 'function' ? 'exito' : 'error');
+                
+            } else {
+                log('❌ Botón VOLVER NO existe en DOM', 'error');
+                
+                // Buscar en popup abierto
+                const popup = document.querySelector('.leaflet-popup-content');
+                if (popup) {
+                    log('Hay popup abierto, buscando dentro...', 'info');
+                    const volverEnPopup = popup.querySelector('.popup-volver-btn');
+                    log(`VOLVER en popup: ${volverEnPopup ? 'ENCONTRADO' : 'NO ENCONTRADO'}`, volverEnPopup ? 'exito' : 'error');
+                } else {
+                    log('No hay popup abierto actualmente', 'info');
+                }
+            }
+            
+            // Info del viewport
+            log(`Ancho ventana: ${window.innerWidth}px - ¿Móvil? ${window.innerWidth <= 600}`, 'info');
+        }
+
+        function verHTMLPopup() {
+            const popup = document.querySelector('.leaflet-popup-content');
+            if (popup) {
+                log('HTML del popup:', 'info');
+                const pre = document.createElement('pre');
+                pre.textContent = popup.innerHTML;
+                pre.style.background = '#fff';
+                pre.style.padding = '10px';
+                pre.style.margin = '10px 0';
+                pre.style.maxHeight = '200px';
+                pre.style.overflow = 'auto';
+                pre.style.fontSize = '12px';
+                document.getElementById('resultados').appendChild(pre);
+            } else {
+                log('No hay popup abierto', 'error');
+            }
+        }
+
+        function verEstilos() {
+            const volverBtn = document.querySelector('.popup-volver-btn');
+            if (volverBtn) {
+                const estilos = window.getComputedStyle(volverBtn);
+                let estilosText = 'Estilos del botón VOLVER:\n';
+                for (let prop of ['display', 'visibility', 'opacity', 'position', 'top', 'left', 'bottom', 'right', 'z-index', 'background', 'color']) {
+                    estilosText += `${prop}: ${estilos.getPropertyValue(prop)}\n`;
+                }
+                log(estilosText, 'info');
+            } else {
+                log('Botón VOLVER no encontrado', 'error');
+            }
+        }
+
+        function forzarVisible() {
+            const volverBtn = document.querySelector('.popup-volver-btn');
+            if (volverBtn) {
+                volverBtn.style.display = 'block !important';
+                volverBtn.style.visibility = 'visible !important';
+                volverBtn.style.opacity = '1 !important';
+                volverBtn.style.position = 'absolute !important';
+                volverBtn.style.bottom = '12px !important';
+                volverBtn.style.left = '12px !important';
+                volverBtn.style.background = 'red !important';
+                volverBtn.style.color = 'white !important';
+                volverBtn.style.zIndex = '999999 !important';
+                log('Estilos forzados aplicados', 'exito');
+            } else {
+                log('Botón VOLVER no encontrado para forzar', 'error');
+            }
+        }
+
+        // Auto-diagnóstico al cargar
+        setTimeout(() => {
+            log('Herramienta de diagnóstico cargada', 'info');
+            log('Recuerda: activa modo móvil y toca un punto del mapa', 'info');
+        }, 1000);
+    </script>
+</body>
+</html>

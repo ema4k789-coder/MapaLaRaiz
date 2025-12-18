@@ -1,0 +1,45 @@
+/* CSS para botón VOLVER - Máxima especificidad */
+
+/* OCULTAR BOTÓN X DE LEAFLET - SOLO EN MÓVIL */
+@media (max-width: 600px) and (orientation: portrait) {
+  .leaflet-popup-close-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+}
+
+/* BOTÓN VOLVER - Máxima especificidad para móvil */
+@media (max-width: 600px) and (orientation: portrait) {
+  .leaflet-popup-content .popup-frame .popup-volver-btn,
+  .popup-volver-btn,
+  button.popup-volver-btn {
+    position: absolute !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    background: red !important;
+    color: white !important;
+    border: 2px solid black !important;
+    border-radius: 4px !important;
+    padding: 6px 12px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    z-index: 999999 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    top: auto !important;
+    right: auto !important;
+  }
+  
+  .leaflet-popup-content .popup-frame .popup-volver-btn:hover,
+  .popup-volver-btn:hover {
+    background: #f0f0f0 !important;
+  }
+}
