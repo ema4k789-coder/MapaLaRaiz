@@ -2,9 +2,6 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="cache-control" content="no-cache">
-  <meta http-equiv="expires" content="0">
-  <meta http-equiv="pragma" content="no-cache">
   <title>Mapa de Escuelas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <link rel="stylesheet" href="leaflet.css" />
@@ -15,6 +12,152 @@
       var l = document.querySelector('link[href="style.css"]');
       if (l) { l.href = 'style.css?v=' + Date.now(); }
     })();
+    window.wirePopupInteractions = function(root,p,isOverlay){
+      if(!root) return;
+      var frame=root.querySelector('.popup-frame');
+      var imgEl=root.querySelector('.frame-img');
+      if(frame && imgEl){
+        imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} };
+        if(window.getFrameURL){
+          window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
+        }
+      }
+      var frameContent=root.querySelector('.frame-content');
+      if(frameContent){
+        var scrollTimeout=null;
+        frameContent.addEventListener('scroll', function(){
+          if(scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout=setTimeout(function(){
+            var ultimoCompleto=null;
+            Array.prototype.forEach.call(frameContent.children, function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
+                ultimoCompleto=child;
+              }
+            });
+            if(ultimoCompleto){
+              var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight;
+              if(frameContent.scrollTop !== nuevoScroll){
+                frameContent.scrollTop=nuevoScroll;
+              }
+            }
+          },120);
+        });
+      }
+      var dlBtn=root.querySelector('.popup-dl-btn');
+      if(dlBtn){
+        dlBtn.onclick = async function(ev){
+          ev.stopPropagation();
+          var targetFrame=root.querySelector('.popup-frame');
+          if(!targetFrame || typeof html2canvas==='undefined') return;
+          var fc=targetFrame.querySelector('.frame-content');
+          if(!fc) return;
+          var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+          var scaleVal=isMobile?1.25:2;
+          var originalScroll=fc.scrollTop;
+          fc.scrollTop=0;
+          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          var hiddenCanvas=null;
+          if(fc.scrollHeight>fc.clientHeight){
+            var saltoScroll=fc.clientHeight;
+            var ultimoCompleto2=null;
+            Array.prototype.forEach.call(fc.children,function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= fc.clientHeight){
+                ultimoCompleto2=child;
+              }
+            });
+            if(ultimoCompleto2){
+              saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
+            }
+            fc.scrollTop=saltoScroll;
+            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          } else {
+            hiddenCanvas=visibleCanvas;
+          }
+          fc.scrollTop=originalScroll;
+          var piz=new Image();
+          piz.onload=function(){
+            var width=piz.width;
+            var height=piz.height;
+            var totalWidth=hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=totalWidth;
+            finalCanvas.height=height;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(piz,0,0,width,height);
+            ctx.drawImage(visibleCanvas,0,0,width,height);
+            if(hiddenCanvas && hiddenCanvas!==visibleCanvas){
+              ctx.drawImage(piz,width,0,width,height);
+              ctx.drawImage(hiddenCanvas,width,0,width,height);
+            }
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+            if(!fname) fname='escuela';
+            fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
+              URL.revokeObjectURL(url);
+            },'image/jpeg',0.92);
+          };
+          piz.onerror=function(){
+            var ancho=visibleCanvas.width;
+            var alto=visibleCanvas.height;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=ancho;
+            finalCanvas.height=alto;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(visibleCanvas,0,0,ancho,alto);
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
+              URL.revokeObjectURL(url);
+            },'image/jpeg',0.92);
+          };
+          piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
+        };
+      }
+      var volverBtn=root.querySelector('.popup-volver-btn');
+      if(volverBtn){
+        volverBtn.onclick=function(ev){
+          ev.stopPropagation();
+          if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); }
+        };
+      }
+    };
   </script>
   <style>
     @font-face { font-family: 'CooperBlackCustom'; src: url('CooperBlackCustom.otf') format('opentype'); font-weight: normal; font-style: normal; }
@@ -389,7 +532,10 @@
     <div id="admin-panel" style="display:none">
       <div id="filtersHeader"></div>
       <div id="filtersPanel">
-        <input id="searchInput" type="text" placeholder="Buscar por nombre, clave, cueanexo">
+        <div class="search-wrap">
+          <input id="searchInput" type="text" placeholder="Buscar por nombre, clave, cueanexo">
+          <button id="clearSearchBtn" type="button" title="Limpiar búsqueda">✕</button>
+        </div>
         <select id="filterDistrito">
           <option value="">Todos los distritos</option>
           <option value="La Plata">La Plata</option>
@@ -406,7 +552,13 @@
       <div id="filterLevelPanel" class="panel-flotante collapsed">
         <div id="panelHeader">
           <button id="togglePanelBtn">☰ Niveles</button>
-          <span class="panel-hint">⬅ SELECCIONAR NIVEL</span>
+          <span class="panel-hint">
+            <span class="panel-hint-arrow">⬅</span>
+            <span class="panel-hint-text">
+              <span class="panel-hint-line">Seleccionar</span>
+              <span class="panel-hint-line">nivel</span>
+            </span>
+          </span>
         </div>
         <div id="panelContent" class="hidden"></div>
         <div id="panelResizer" title="Redimensionar panel">⇲</div>
@@ -426,7 +578,7 @@
     function isMobilePortrait(){ var w=window.innerWidth||0,h=window.innerHeight||0; return w<=600 && h>=w; }
     function onPopupOpenCommon(){ try{ var w=window.innerWidth||1024; if(w<=600){ var admin=document.getElementById('admin-panel'); if(admin && window.adminPanelOpen){ window.adminPanelOpen=false; admin.style.display='none'; } } }catch(e){} }
     function hideSchoolOverlay(){ var ov=document.getElementById('schoolOverlay'); if(ov){ ov.classList.remove('active'); } }
-    function wirePopupInteractions(root,p,isOverlay){ if(!root) return; var frame=root.querySelector('.popup-frame'); var imgEl=root.querySelector('.frame-img'); if(frame && imgEl){ imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} }; if(window.getFrameURL){ window.getFrameURL().then(function(url){ if(url) imgEl.src=url; }); } } var frameContent=root.querySelector('.frame-content'); if(frameContent){ var scrollTimeout=null; frameContent.addEventListener('scroll', function(){ if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(function(){ var ultimoCompleto=null; Array.prototype.forEach.call(frameContent.children, function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight; if(frameContent.scrollTop !== nuevoScroll){ frameContent.scrollTop = nuevoScroll; } } }, 120); }); } var dlBtn=root.querySelector('.popup-dl-btn'); if(dlBtn){ dlBtn.onclick = async function(ev){ ev.stopPropagation(); var targetFrame=root.querySelector('.popup-frame'); if(!targetFrame) return; var fc=targetFrame.querySelector('.frame-content'); if(!fc) return; var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)); var scaleVal=isMobile?1.25:2; var originalScroll=fc.scrollTop; fc.scrollTop=0; var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); fc.scrollTop = originalScroll; var piz = new Image(); piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png'; piz.onload = function(){ var width=piz.width, height=piz.height; var finalCanvas=document.createElement('canvas'); finalCanvas.width=width; finalCanvas.height=height; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(piz,0,0,width,height); ctx.drawImage(visibleCanvas,0,0,width,height); finalCanvas.toBlob(function(blob){ var url=URL.createObjectURL(blob); var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg'; var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent); if(isIOS){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); } }, 'image/jpeg', 0.92); }; }; } var volverBtn=root.querySelector('.popup-volver-btn'); if(volverBtn){ volverBtn.onclick=function(ev){ ev.stopPropagation(); if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); } }; } }
+    function wirePopupInteractions(root,p,isOverlay){ if(!root) return; var frame=root.querySelector('.popup-frame'); var imgEl=root.querySelector('.frame-img'); if(frame && imgEl){ imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} }; if(window.getFrameURL){ window.getFrameURL().then(function(url){ if(url) imgEl.src=url; }); } } var frameContent=root.querySelector('.frame-content'); if(frameContent){ var scrollTimeout=null; frameContent.addEventListener('scroll', function(){ if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(function(){ var ultimoCompleto=null; Array.prototype.forEach.call(frameContent.children, function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight; if(frameContent.scrollTop !== nuevoScroll){ frameContent.scrollTop = nuevoScroll; } } }, 120); }); } var dlBtn=root.querySelector('.popup-dl-btn'); if(dlBtn){ dlBtn.onclick = async function(ev){ ev.stopPropagation(); var targetFrame=root.querySelector('.popup-frame'); if(!targetFrame || typeof html2canvas==='undefined') return; var fc=targetFrame.querySelector('.frame-content'); if(!fc) return; var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)); var scaleVal=isMobile?1.25:2; var originalScroll=fc.scrollTop; fc.scrollTop=0; var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); var hiddenCanvas=null; if(fc.scrollHeight>fc.clientHeight){ var saltoScroll=fc.clientHeight; var ultimoCompleto=null; Array.prototype.forEach.call(fc.children,function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= fc.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ saltoScroll=ultimoCompleto.offsetTop+ultimoCompleto.offsetHeight; } fc.scrollTop=saltoScroll; hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); } else { hiddenCanvas=visibleCanvas; } fc.scrollTop = originalScroll; var piz = new Image(); piz.onload = function(){ var width=piz.width, height=piz.height; var totalWidth = hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width; var finalCanvas=document.createElement('canvas'); finalCanvas.width=totalWidth; finalCanvas.height=height; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(piz,0,0,width,height); ctx.drawImage(visibleCanvas,0,0,width,height); if(hiddenCanvas && hiddenCanvas!==visibleCanvas){ ctx.drawImage(piz,width,0,width,height); ctx.drawImage(hiddenCanvas,width,0,width,height); } var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_'); if(!fname) fname='escuela'; fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.onerror=function(){ var ancho=visibleCanvas.width, alto=visibleCanvas.height; var finalCanvas=document.createElement('canvas'); finalCanvas.width=ancho; finalCanvas.height=alto; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(visibleCanvas,0,0,ancho,alto); var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png'; }; } var volverBtn=root.querySelector('.popup-volver-btn'); if(volverBtn){ volverBtn.onclick=function(ev){ ev.stopPropagation(); if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); } }; } }
     function showSchoolOverlay(html,p){ var ov=document.getElementById('schoolOverlay'); var inner=document.getElementById('schoolOverlayInner'); if(!ov||!inner) return; inner.innerHTML=html; ov.style.paddingTop='0'; ov.classList.add('active'); wirePopupInteractions(inner,p,true); }
     function startApp(){ var s=document.getElementById('splash'); var t=document.querySelector('.splash-texts-container'); var m=document.getElementById('mainApp'); var f=document.getElementById('flagContainer'); var e=document.getElementById('easterEgg'); if(s) s.style.display='none'; if(t) t.style.display='none'; if(f) f.style.display='none'; if(e) e.style.display='none'; if(m) m.style.display='block'; window.inSplashScreen=false; setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 350); }
     (function(){ var clickCount=0; var hideTimer=null; var circle=document.querySelector('.circle-bounce'); var btn=document.getElementById('startBtn'); function isOutside(t){ return !(circle&&circle.contains(t)) && !(btn&&btn.contains(t)); } function isInSplash(){ return window.inSplashScreen!==false; } function showEgg(){ var egg=document.getElementById('easterEgg'); if(!egg) return; egg.style.display='flex'; if(hideTimer) clearTimeout(hideTimer); hideTimer=setTimeout(function(){ egg.style.display='none'; }, 4000); } function showFlag(){ var flag=document.getElementById('flagContainer'); var circle=document.querySelector('.circle-bounce'); if(!flag || !circle) return; circle.style.display='none'; flag.style.display='block'; 
@@ -481,10 +633,11 @@
           m.on('popupopen', function(){ onPopupOpenCommon(); var content=document.querySelector('.leaflet-popup-content'); if(!content) return; wirePopupInteractions(content,p,false); });
         }
         markers.push(m); }catch(e){} }); var c=document.getElementById('counter'); if(c) c.textContent=String(a.length); }
-    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var levelAll=null; var levelChecks=[];
+    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var clearSearchBtn=document.getElementById('clearSearchBtn'); var levelAll=null; var levelChecks=[];
     function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g,function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]; }); }
+    function setClearSearchVisible(){ if(!clearSearchBtn||!searchInput) return; var wrap=clearSearchBtn.parentNode; if(!wrap || !wrap.classList) return; wrap.classList.toggle('has-text', String(searchInput.value||'').length>0); }
     function updateLevelsBadgeCount(){ var btn=document.getElementById('levelsHeaderBtn'); if(!btn) return; var total=Array.isArray(levelChecks)?levelChecks.length:0; var count=(levelAll && levelAll.checked) ? total : levelChecks.filter(function(cb){ return cb.checked; }).length; btn.setAttribute('data-count', String(count)); }
-    function populateLocalities(){ var distrito=(distritoSelect.value||'').trim(); if(!distrito){ localidadSelect.style.display='none'; return; } var base=getBaseFeatures(); var locSet=new Set(); var hasLaPlata=false; base.forEach(function(f){ var p=f.properties||{}; if((p.distrito||'').trim()===distrito){ var canon=(p.localidad_norm||normalizeLocalidadName(p.localidad||'')); if(canon){ if(canon==='La Plata') hasLaPlata=true; locSet.add(canon); } } }); var list=Array.from(locSet).sort(function(a,b){ return a.localeCompare(b,'es'); }); localidadSelect.innerHTML=''; var opt=document.createElement('option'); opt.value=''; opt.textContent='Todas las localidades'; localidadSelect.appendChild(opt); if(distrito==='La Plata'&&hasLaPlata){ var cascoOpt=document.createElement('option'); cascoOpt.value='Casco Urbano'; cascoOpt.textContent='Casco Urbano'; localidadSelect.appendChild(cascoOpt); }
+    function populateLocalities(){ var distrito=(distritoSelect.value||'').trim(); if(!distrito || distrito!=='La Plata'){ if(localidadSelect){ localidadSelect.value=''; localidadSelect.innerHTML=''; localidadSelect.style.display='none'; } return; } var base=getBaseFeatures(); var locSet=new Set(); var hasLaPlata=false; base.forEach(function(f){ var p=f.properties||{}; if((p.distrito||'').trim()===distrito){ var canon=(p.localidad_norm||normalizeLocalidadName(p.localidad||'')); if(canon){ if(canon==='La Plata') hasLaPlata=true; locSet.add(canon); } } }); var list=Array.from(locSet).sort(function(a,b){ return a.localeCompare(b,'es'); }); localidadSelect.innerHTML=''; var opt=document.createElement('option'); opt.value=''; opt.textContent='Todas las localidades'; localidadSelect.appendChild(opt); if(distrito==='La Plata'&&hasLaPlata){ var cascoOpt=document.createElement('option'); cascoOpt.value='Casco Urbano'; cascoOpt.textContent='Casco Urbano'; localidadSelect.appendChild(cascoOpt); }
       list.forEach(function(l){ var ln=l.trim().toLowerCase(); if(distrito==='La Plata' && ln==='la plata') return; var o=document.createElement('option'); if(ln==='san carlos'){ o.value='SAN CARLOS'; o.textContent='SAN CARLOS'; } else { o.value=l; o.textContent=l; } localidadSelect.appendChild(o); }); localidadSelect.style.display=''; }
     function getBaseFeatures(){ return allSchools.map(function(f){ var p=f.properties||{}; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; }); }
     function filterSchools(){ var text=(searchInput.value||'').trim().toLowerCase(); var distrito=distritoSelect.value||''; var localidad=(localidadSelect&&localidadSelect.value)||''; var base=getBaseFeatures();
@@ -498,7 +651,8 @@
       if(localidad){ var locSel = localidad.trim().toLowerCase(); if(locSel==='casco urbano'){ filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()==='la plata'; }); } else { filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()===locSel; }); } }
       if(text){ filtered = filtered.filter(function(f){ var p=f.properties||{}; return (p.nombre||'').toLowerCase().includes(text) || (p.numero||'').toString().toLowerCase().includes(text) || (p.nivel||'').toLowerCase().includes(text) || (p.localidad||'').toLowerCase().includes(text) || (p.localidad_norm||'').toLowerCase().includes(text); }); }
       clearMarkers(); renderMarkers(filtered); var c=document.getElementById('counter'); if(c) c.textContent=filtered.length; updateLevelsBadgeCount(); }
-    distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); }); } searchInput.addEventListener('input', filterSchools);
+    if(clearSearchBtn){ clearSearchBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} if(!searchInput) return; searchInput.value=''; setClearSearchVisible(); filterSchools(); try{ searchInput.focus(); }catch(e){} }); }
+    distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); }); } searchInput.addEventListener('input', function(){ setClearSearchVisible(); filterSchools(); }); setClearSearchVisible();
     function isPolygonGeojson(g){ return !!g && (g.type==='Polygon' || g.type==='MultiPolygon'); }
     function addBoundaryGeoJSON(geojson){ try{ var glow=L.geoJSON(geojson,{ pane:'boundariesGlowPane', color:'#ff0033', weight:28, opacity:0.22, fill:false }).addTo(map); var sharp=L.geoJSON(geojson,{ pane:'boundariesPane', color:'#ff0033', weight:3, opacity:0.9, fill:false }).addTo(map); boundaryLayers.push(glow); boundaryLayers.push(sharp); }catch(e){} }
     function tryLoadMunicipalBoundaries(){ return fetch('municipios_boundaries.geojson').then(function(r){ if(!r||!r.ok) return null; return r.json(); }).then(function(gj){ if(!gj) return false; var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; var n=f&&f.properties&&f.properties.name; if(g&&isPolygonGeojson(g)){ municipioGeomByName[(n||'').toLowerCase()]=g; } }); Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); return true; }).catch(function(){ return false; }); }
@@ -523,13 +677,14 @@
       var ordenMap = new Map(orden.map(function(n,i){ return [normStr(n), i]; }));
       nivelesFiltrados.sort(function(a,b){ var ia=ordenMap.has(normStr(a))?ordenMap.get(normStr(a)):Number.MAX_SAFE_INTEGER; var ib=ordenMap.has(normStr(b))?ordenMap.get(normStr(b)):Number.MAX_SAFE_INTEGER; if(ia!==ib) return ia-ib; return normStr(a).localeCompare(normStr(b)); });
       var panelContent=document.getElementById('panelContent'); panelContent.innerHTML='';
-      var allLabel=document.createElement('label'); allLabel.className='levels-all'; var allCb=document.createElement('input'); allCb.type='checkbox'; allCb.id='levelAll'; allCb.checked=true; allLabel.appendChild(allCb); allLabel.appendChild(document.createTextNode(' Todos los niveles')); panelContent.appendChild(allLabel);
-      nivelesFiltrados.forEach(function(nivel){ var label=document.createElement('label'); var cb=document.createElement('input'); cb.type='checkbox'; cb.className='levelCheck'; cb.value=nivel; cb.checked=true; var color=getColorByLevel(nivel); label.style.borderLeft='12px solid '+color; label.style.paddingLeft='8px'; label.appendChild(cb); var normNivel=normStr(nivel); var displayName=(normNivel===normStr('PLAN FINES (TRAYECTOS Y DEUDORES)'))?'CENS':nivel.toUpperCase(); label.appendChild(document.createTextNode(' '+displayName)); panelContent.appendChild(label); });
+      var allLabel=document.createElement('label'); allLabel.className='levels-all'; var allCb=document.createElement('input'); allCb.type='checkbox'; allCb.id='levelAll'; allCb.checked=false; allLabel.appendChild(allCb); allLabel.appendChild(document.createTextNode(' Todos los niveles')); panelContent.appendChild(allLabel);
+      nivelesFiltrados.forEach(function(nivel){ var label=document.createElement('label'); var cb=document.createElement('input'); cb.type='checkbox'; cb.className='levelCheck'; cb.value=nivel; cb.checked=false; var color=getColorByLevel(nivel); label.style.borderLeft='12px solid '+color; label.style.paddingLeft='8px'; label.appendChild(cb); var normNivel=normStr(nivel); var displayName=(normNivel===normStr('PLAN FINES (TRAYECTOS Y DEUDORES)'))?'CENS':nivel.toUpperCase(); label.appendChild(document.createTextNode(' '+displayName)); panelContent.appendChild(label); });
+      var scrollHint=document.createElement('div'); scrollHint.className='panel-scroll-hint'; scrollHint.innerHTML='Deslizar para ver más niveles <span class=\"panel-scroll-hint-icon\">⬇⬇</span>'; panelContent.appendChild(scrollHint);
       levelAll=document.getElementById('levelAll'); levelChecks=Array.from(document.querySelectorAll('.levelCheck'));
       if(levelAll){ levelAll.addEventListener('change', function(){ var v=levelAll.checked; levelChecks.forEach(function(cb){ cb.checked=v; }); filterSchools(); updateLevelsBadgeCount(); }); }
       levelChecks.forEach(function(cb){ cb.addEventListener('change', function(e){ e.stopPropagation(); if(!cb.checked){ if(levelAll) levelAll.checked=false; } else if(levelAll && levelChecks.every(function(c){ return c.checked; })){ levelAll.checked=true; } filterSchools(); updateLevelsBadgeCount(); }); });
-      populateLocalities(); renderMarkers(allSchools); updateLevelsBadgeCount(); filterSchools(); tryLoadMunicipalBoundaries().then(function(ok){ if(ok){ try{ var fc={ type:'FeatureCollection', features:[] }; ['la plata','berisso','ensenada'].forEach(function(n){ var g=municipioGeomByName[n]; if(g){ fc.features.push({ type:'Feature', geometry:g }); } }); }catch(e){} } }); tryLoadLocalBoundaryLines().then(function(){ updateDisplayForSelectedDistrict(); }); applyPanelPosition(); });
-    function applyPanelPosition(){ var panel=document.getElementById('filterLevelPanel'); var content=document.getElementById('panelContent'); var topbar=document.getElementById('topbar'); var admin=document.getElementById('admin-panel'); if(!panel) return; var th= topbar ? topbar.offsetHeight : 0; var adminVisible = admin && window.getComputedStyle(admin).display !== 'none'; var ah= adminVisible ? (admin.offsetHeight || 0) : 0; var offset = (th + ah + 8); panel.style.top = offset + 'px'; try{ document.documentElement.style.setProperty('--controls-top', offset + 'px'); }catch(e){} }
+      populateLocalities(); renderMarkers([]); updateLevelsBadgeCount(); filterSchools(); tryLoadMunicipalBoundaries().then(function(ok){ if(ok){ try{ var fc={ type:'FeatureCollection', features:[] }; ['la plata','berisso','ensenada'].forEach(function(n){ var g=municipioGeomByName[n]; if(g){ fc.features.push({ type:'Feature', geometry:g }); } }); }catch(e){} } }); tryLoadLocalBoundaryLines().then(function(){ updateDisplayForSelectedDistrict(); }); applyPanelPosition(); });
+    function applyPanelPosition(){ var panel=document.getElementById('filterLevelPanel'); var content=document.getElementById('panelContent'); var topbar=document.getElementById('topbar'); var admin=document.getElementById('admin-panel'); if(!panel) return; var th= topbar ? topbar.offsetHeight : 0; var adminVisible = admin && window.getComputedStyle(admin).display !== 'none'; var ah= adminVisible ? (admin.offsetHeight || 0) : 0; var offset = (th + ah + 8); panel.style.top = offset + 'px'; var vh = window.innerHeight || document.documentElement.clientHeight || 768; var maxPanelH = Math.max(140, vh - offset - 12); panel.style.maxHeight = maxPanelH + 'px'; if(content){ var header = document.getElementById('panelHeader'); var resizer = document.getElementById('panelResizer'); var headerH = header ? header.offsetHeight : 0; var resizerH = resizer ? resizer.offsetHeight : 0; var contentMax = Math.max(80, maxPanelH - headerH - resizerH - 24); content.style.maxHeight = contentMax + 'px'; content.style.overflowY = 'auto'; } try{ document.documentElement.style.setProperty('--controls-top', offset + 'px'); }catch(e){} }
     (function(){ var btn=document.getElementById('togglePanelBtn'); var content=document.getElementById('panelContent'); var panel=document.getElementById('filterLevelPanel'); var levelsBtn=document.getElementById('levelsHeaderBtn'); function openLevelsPanel(){ if(panel) panel.classList.remove('collapsed'); if(content) content.classList.remove('hidden'); applyPanelPosition(); } function closeLevelsPanel(){ if(content) content.classList.add('hidden'); if(panel) panel.classList.add('collapsed'); } function toggleLevelsPanel(){ 
       var isClosed = !panel || panel.classList.contains('collapsed') || (content && content.classList.contains('hidden')); 
       // Cerrar popups antes de abrir panel
@@ -562,6 +717,134 @@
       applyPanelPosition(); 
       updateFiltersText(); 
     } if(filtersBtn){ filtersBtn.addEventListener('click', toggleAdmin); } if(filtersTopBtn){ filtersTopBtn.addEventListener('click', toggleAdmin); } var toggleBoundariesBtn=document.getElementById('toggleBoundariesVisibilityBtn'); if(toggleBoundariesBtn){ toggleBoundariesBtn.addEventListener('click', function(){ setBoundariesHidden(!boundariesHidden); }); } window.addEventListener('resize', applyPanelPosition); document.getElementById('startBtn').addEventListener('click', function(){ applyPanelPosition(); closeLevelsPanel(); updateFiltersText(); }); updateFiltersText(); })();
+    window.wirePopupInteractions = function(root,p,isOverlay){
+      if(!root) return;
+      var frame=root.querySelector('.popup-frame');
+      var imgEl=root.querySelector('.frame-img');
+      if(frame && imgEl){
+        imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} };
+        if(window.getFrameURL){
+          window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
+        }
+      }
+      var frameContent=root.querySelector('.frame-content');
+      if(frameContent){
+        var scrollTimeout=null;
+        frameContent.addEventListener('scroll', function(){
+          if(scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout=setTimeout(function(){
+            var ultimoCompleto=null;
+            Array.prototype.forEach.call(frameContent.children, function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
+                ultimoCompleto=child;
+              }
+            });
+            if(ultimoCompleto){
+              var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight;
+              if(frameContent.scrollTop !== nuevoScroll){
+                frameContent.scrollTop=nuevoScroll;
+              }
+            }
+          },120);
+        });
+      }
+      var dlBtn=root.querySelector('.popup-dl-btn');
+      if(dlBtn){
+        dlBtn.onclick = async function(ev){
+          ev.stopPropagation();
+          var targetFrame=root.querySelector('.popup-frame');
+          if(!targetFrame || typeof html2canvas==='undefined') return;
+          var fc=targetFrame.querySelector('.frame-content');
+          if(!fc) return;
+          var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+          var scaleVal=isMobile?1.25:2;
+          var originalScroll=fc.scrollTop;
+          fc.scrollTop=0;
+          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          var hiddenCanvas=null;
+          if(fc.scrollHeight>fc.clientHeight){
+            var saltoScroll=fc.clientHeight;
+            var ultimoCompleto2=null;
+            Array.prototype.forEach.call(fc.children,function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= fc.clientHeight){
+                ultimoCompleto2=child;
+              }
+            });
+            if(ultimoCompleto2){
+              saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
+            }
+            fc.scrollTop=saltoScroll;
+            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          } else {
+            hiddenCanvas=visibleCanvas;
+          }
+          fc.scrollTop=originalScroll;
+          var piz=new Image();
+          piz.onload=function(){
+            var width=piz.width;
+            var height=piz.height;
+            var totalWidth=hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=totalWidth;
+            finalCanvas.height=height;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(piz,0,0,width,height);
+            ctx.drawImage(visibleCanvas,0,0,width,height);
+            if(hiddenCanvas && hiddenCanvas!==visibleCanvas){
+              ctx.drawImage(piz,width,0,width,height);
+              ctx.drawImage(hiddenCanvas,width,0,width,height);
+            }
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+            if(!fname) fname='escuela';
+            fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var a=document.createElement('a');
+              a.href=url;
+              a.download=fname;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              alert('Imagen descargada: '+fname);
+            },'image/jpeg',0.92);
+          };
+          piz.onerror=function(){
+            var ancho=visibleCanvas.width;
+            var alto=visibleCanvas.height;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=ancho;
+            finalCanvas.height=alto;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(visibleCanvas,0,0,ancho,alto);
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var a=document.createElement('a');
+              a.href=url;
+              a.download=fname;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              alert('Imagen descargada: '+fname);
+            },'image/jpeg',0.92);
+          };
+          piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
+        };
+      }
+      var volverBtn=root.querySelector('.popup-volver-btn');
+      if(volverBtn){
+        volverBtn.onclick=function(ev){
+          ev.stopPropagation();
+          if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); }
+        };
+      }
+    };
   </script>
 </body>
 </html>
