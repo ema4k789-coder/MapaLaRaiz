@@ -15,18 +15,18 @@
   .popup-frame {
     width: 96vw;
     max-width: 96vw;
-    max-height: 78vh;
+    max-height: 82vh;
     aspect-ratio: 0.78;
   }
   .leaflet-popup-content-wrapper {
-    max-height: 80vh !important;
+    max-height: 86vh !important;
     overflow: visible !important;
   }
   .frame-content {
     font-size: 0.85em;
     line-height: 1.25;
-    padding: 6px 8px 90px 8px;
-    max-height: 60vh !important;
+    padding: 6px 8px 64px 8px;
+    max-height: 70vh !important;
   }
 }
 .popup-frame .popup-volver-btn {
@@ -445,6 +445,17 @@
   box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
 #toggleBoundariesVisibilityBtn:hover { filter: brightness(1.08); }
+#toggleBusRoutesBtn {
+  background: linear-gradient(180deg, #444 0%, #2a2a2a 100%);
+  color: #fff;
+  border: 1px solid #000;
+  border-radius: 10px;
+  padding: 8px 18px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+#toggleBusRoutesBtn.active {
+  background: linear-gradient(180deg, #00bfa5 0%, #009688 100%);
+}
 #geojsonEditModeBtn {
   background: linear-gradient(180deg, #444 0%, #2a2a2a 100%);
   color: #fff;

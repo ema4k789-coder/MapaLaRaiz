@@ -30,7 +30,7 @@ function notify(msg){
   }catch(e){}
 }
 if(location&&location.protocol==='file:'){
-  notify('Abrir en http://localhost:8080/main.html para evitar bloqueos');
+  notify('Abrir en http://localhost:8080/ para evitar bloqueos');
 }
 try{
   window.addEventListener('unhandledrejection',function(){ notify('No se pudo cargar datos. Use http://localhost:8080'); });
@@ -473,27 +473,6 @@ else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelB
         }
       }
       const frameContent = content.querySelector('.frame-content');
-      if (frameContent) {
-        let scrollTimeout = null;
-        frameContent.addEventListener('scroll', function() {
-          if (scrollTimeout) clearTimeout(scrollTimeout);
-          scrollTimeout = setTimeout(function() {
-            let ultimoCompleto = null;
-            for (const child of frameContent.children) {
-              const childBottom = child.offsetTop + child.offsetHeight;
-              if (childBottom <= frameContent.scrollTop + frameContent.clientHeight) {
-                ultimoCompleto = child;
-              }
-            }
-            if (ultimoCompleto) {
-              const nuevoScroll = ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight;
-              if (frameContent.scrollTop !== nuevoScroll) {
-                frameContent.scrollTop = nuevoScroll;
-              }
-            }
-          }, 120);
-        });
-      }
       const dlBtn = content.querySelector('.popup-dl-btn');
       if (dlBtn) {
         dlBtn.onclick = async function(ev) {
@@ -502,50 +481,53 @@ else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelB
           if (!targetFrame) return;
           const frameContent = targetFrame.querySelector('.frame-content');
           if (!frameContent) return;
-          const isMobile = ((window.innerWidth || 1024) <= 600) || (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
-          const scaleVal = isMobile ? 1.25 : 2;
+          const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+          const scaleVal = 2;
           const originalScroll = frameContent.scrollTop;
+          const originalMaxHeight = frameContent.style.maxHeight;
+          const originalHeight = frameContent.style.height;
+          const originalOverflowY = frameContent.style.overflowY;
+          const fullHeight = frameContent.scrollHeight;
+          frameContent.style.maxHeight = 'none';
+          frameContent.style.height = fullHeight + 'px';
+          frameContent.style.overflowY = 'visible';
           frameContent.scrollTop = 0;
-          const visibleCanvas = await html2canvas(targetFrame, { backgroundColor: null, useCORS: true, scale: scaleVal });
-          let hiddenCanvas = null;
-          if (frameContent.scrollHeight > frameContent.clientHeight) {
-            let saltoScroll = frameContent.clientHeight;
-            let ultimoCompleto = null;
-            for (const child of frameContent.children) {
-              const childBottom = child.offsetTop + child.offsetHeight;
-              if (childBottom <= frameContent.clientHeight) {
-                ultimoCompleto = child;
-              }
-            }
-            if (ultimoCompleto) {
-              saltoScroll = ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight;
-            }
-            frameContent.scrollTop = saltoScroll;
-            hiddenCanvas = await html2canvas(targetFrame, { backgroundColor: null, useCORS: true, scale: scaleVal });
-          } else {
-            hiddenCanvas = visibleCanvas;
-          }
+          const contentCanvas = await html2canvas(frameContent, { backgroundColor: null, useCORS: true, scale: scaleVal });
+          frameContent.style.maxHeight = originalMaxHeight;
+          frameContent.style.height = originalHeight;
+          frameContent.style.overflowY = originalOverflowY;
           frameContent.scrollTop = originalScroll;
           const pizarronImg = new window.Image();
           pizarronImg.src = targetFrame.querySelector('.frame-img')?.src || 'pizarron.png';
           pizarronImg.onload = function() {
             const width = pizarronImg.width;
             const height = pizarronImg.height;
-            const totalWidth = hiddenCanvas ? width * 2 : width;
+            const contentHeight = contentCanvas.height;
+            const pages = Math.max(1, Math.ceil(contentHeight / height));
+            const sliceHeight = Math.ceil(contentHeight / pages);
             const finalCanvas = document.createElement('canvas');
-            finalCanvas.width = totalWidth;
-            finalCanvas.height = height;
+            finalCanvas.width = width;
+            finalCanvas.height = height * pages;
             const ctx = finalCanvas.getContext('2d');
-            ctx.drawImage(pizarronImg, 0, 0, width, height);
-            ctx.drawImage(visibleCanvas, 0, 0, width, height);
-            if (hiddenCanvas) {
-              ctx.drawImage(pizarronImg, width, 0, width, height);
-              ctx.drawImage(hiddenCanvas, width, 0, width, height);
+            for (let i = 0; i < pages; i++) {
+              const srcY = i * sliceHeight;
+              let srcH = sliceHeight;
+              if (srcY + srcH > contentHeight) {
+                srcH = contentHeight - srcY;
+              }
+              if (srcH <= 0) continue;
+              const pageCanvas = document.createElement('canvas');
+              pageCanvas.width = width;
+              pageCanvas.height = height;
+              const pageCtx = pageCanvas.getContext('2d');
+              pageCtx.drawImage(pizarronImg, 0, 0, width, height);
+              pageCtx.drawImage(contentCanvas, 0, srcY, contentCanvas.width, srcH, 0, 0, width, height);
+              ctx.drawImage(pageCanvas, 0, i * height);
             }
             finalCanvas.toBlob(function(blob) {
               const url = URL.createObjectURL(blob);
-              const fname = `${(props.nombre || 'escuela').toString().replace(/[^a-z0-9\- ]/gi,'_')}_doble.jpg`;
-              const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+              const base = (props.nombre || 'escuela').toString().replace(/[^a-z0-9\- ]/gi,'_');
+              const fname = pages > 1 ? `${base}_paginas${pages}.jpg` : `${base}.jpg`;
               if (isIOS) {
                 try { window.open(url, '_blank'); } catch(e){}
                 setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000);

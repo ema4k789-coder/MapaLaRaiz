@@ -52,30 +52,50 @@
           if(!targetFrame || typeof html2canvas==='undefined') return;
           var fc=targetFrame.querySelector('.frame-content');
           if(!fc) return;
+          var generalFields=targetFrame.querySelector('.general-fields');
+          var comoFields=targetFrame.querySelector('.como-fields');
+          var comoLine=targetFrame.querySelector('.field-line-comollego');
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
           var originalScroll=fc.scrollTop;
-          fc.scrollTop=0;
-          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          var visibleCanvas=null;
           var hiddenCanvas=null;
-          if(fc.scrollHeight>fc.clientHeight){
-            var saltoScroll=fc.clientHeight;
-            var ultimoCompleto2=null;
-            Array.prototype.forEach.call(fc.children,function(child){
-              var childBottom=child.offsetTop+child.offsetHeight;
-              if(childBottom <= fc.clientHeight){
-                ultimoCompleto2=child;
-              }
-            });
-            if(ultimoCompleto2){
-              saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
-            }
-            fc.scrollTop=saltoScroll;
+          if(generalFields && comoFields && comoLine){
+            var prevGenDisplay=generalFields.style.display;
+            var prevComoDisplay=comoFields.style.display;
+            fc.scrollTop=0;
+            comoFields.style.display='none';
+            generalFields.style.display='';
+            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            generalFields.style.display='none';
+            comoFields.style.display='';
+            fc.scrollTop=0;
             hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            generalFields.style.display=prevGenDisplay;
+            comoFields.style.display=prevComoDisplay;
+            fc.scrollTop=originalScroll;
           } else {
-            hiddenCanvas=visibleCanvas;
+            fc.scrollTop=0;
+            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            if(fc.scrollHeight>fc.clientHeight){
+              var saltoScroll=fc.clientHeight;
+              var ultimoCompleto2=null;
+              Array.prototype.forEach.call(fc.children,function(child){
+                var childBottom=child.offsetTop+child.offsetHeight;
+                if(childBottom <= fc.clientHeight){
+                  ultimoCompleto2=child;
+                }
+              });
+              if(ultimoCompleto2){
+                saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
+              }
+              fc.scrollTop=saltoScroll;
+              hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            } else {
+              hiddenCanvas=visibleCanvas;
+            }
+            fc.scrollTop=originalScroll;
           }
-          fc.scrollTop=originalScroll;
           var piz=new Image();
           piz.onload=function(){
             var width=piz.width;
@@ -150,6 +170,10 @@
           piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
         };
       }
+      var mapBtn=root.querySelector('.popup-map-capture-btn');
+      if(mapBtn){
+        try{ mapBtn.parentNode.removeChild(mapBtn); }catch(e){}
+      }
       var volverBtn=root.querySelector('.popup-volver-btn');
       if(volverBtn){
         volverBtn.onclick=function(ev){
@@ -182,6 +206,27 @@
     .splash-texts-container .splash-btn::before { content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; background: linear-gradient(45deg, #ffffff, #f0f0f0, #ffffff); border-radius: 27px; z-index: -1; opacity: 0; transition: opacity 0.3s ease; }
     .splash-texts-container .splash-btn:hover::before { opacity: 1; }
     .splash-texts-container .splash-btn:hover { box-shadow: 0 0 20px rgba(255,255,255,0.4) inset, 0 6px 25px rgba(0,0,0,0.2); }
+    .bus-route-label{
+      font-size:9px;
+      padding:1px 3px;
+      background-color:rgba(255,255,255,0.78);
+      border:1px solid rgba(0,0,0,0.25);
+      border-radius:2px;
+      box-shadow:none;
+      pointer-events:none;
+    }
+    .school-name-label{
+      font-size:11px;
+      font-weight:bold;
+      padding:1px 4px;
+      background-color:rgba(255,255,255,0.9);
+      border:1px solid rgba(0,0,0,0.35);
+      border-radius:3px;
+      pointer-events:none;
+    }
+    .map-capture-mode .leaflet-popup{
+      display:none !important;
+    }
     @keyframes pulseSoft { 0%{ box-shadow: 0 2px 8px rgba(0,0,0,0.15); } 50%{ box-shadow: 0 6px 20px rgba(0,0,0,0.25); background-color: #ffffff; } 100%{ box-shadow: 0 2px 8px rgba(0,0,0,0.15); } }
      @keyframes pulse { 0%{ box-shadow: 0 1px 1px 0 #fff0, 0 1px 1px #0001;} 50%{ box-shadow: 0 4px 8px 0 #fff0, 0 4px 8px #2222;} 100%{ box-shadow: 0 1px 1px 0 #fff0, 0 1px 1px #0001;} }
     #mainApp { display:none; height:100%; position:fixed; top:0; left:0; width:100%; }
@@ -547,6 +592,8 @@
           <button id="toggleBoundariesVisibilityBtn" title="Mostrar/ocultar límites">◫</button>
           <span id="counter" title="Cantidad de resultados">0</span>
         </div>
+        <button id="toggleBusRoutesBtn" title="Mostrar/ocultar recorridos de colectivos">🚌</button>
+        <select id="busRouteSelect" style="display:none"></select>
         <button id="geojsonEditModeBtn" title="Modo edición GeoJSON">⤡</button>
       </div>
       <div id="filterLevelPanel" class="panel-flotante collapsed">
@@ -575,11 +622,18 @@
     var municipioGeomByName = {};
     var boundaryLayers = [];
     var localityBoundariesLoaded = false;
+    var busRoutesLayer = null;
+    var busRoutesHighlightLayer = null;
+    var busRoutesVisible = false;
+    var busRoutesDataLoaded = false;
+    var busRoutesAllFeatures = [];
+    var busRouteKeys = [];
+    var busRouteKeySamples = {};
     function isMobilePortrait(){ var w=window.innerWidth||0,h=window.innerHeight||0; return w<=600 && h>=w; }
     function onPopupOpenCommon(){ try{ var w=window.innerWidth||1024; if(w<=600){ var admin=document.getElementById('admin-panel'); if(admin && window.adminPanelOpen){ window.adminPanelOpen=false; admin.style.display='none'; } } }catch(e){} }
-    function hideSchoolOverlay(){ var ov=document.getElementById('schoolOverlay'); if(ov){ ov.classList.remove('active'); } }
+    function hideSchoolOverlay(){ var ov=document.getElementById('schoolOverlay'); if(ov){ ov.classList.remove('active'); } if(typeof clearBusHighlight==='function'){ try{ clearBusHighlight(); }catch(e){} } }
     function wirePopupInteractions(root,p,isOverlay){ if(!root) return; var frame=root.querySelector('.popup-frame'); var imgEl=root.querySelector('.frame-img'); if(frame && imgEl){ imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} }; if(window.getFrameURL){ window.getFrameURL().then(function(url){ if(url) imgEl.src=url; }); } } var frameContent=root.querySelector('.frame-content'); if(frameContent){ var scrollTimeout=null; frameContent.addEventListener('scroll', function(){ if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(function(){ var ultimoCompleto=null; Array.prototype.forEach.call(frameContent.children, function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight; if(frameContent.scrollTop !== nuevoScroll){ frameContent.scrollTop = nuevoScroll; } } }, 120); }); } var dlBtn=root.querySelector('.popup-dl-btn'); if(dlBtn){ dlBtn.onclick = async function(ev){ ev.stopPropagation(); var targetFrame=root.querySelector('.popup-frame'); if(!targetFrame || typeof html2canvas==='undefined') return; var fc=targetFrame.querySelector('.frame-content'); if(!fc) return; var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)); var scaleVal=isMobile?1.25:2; var originalScroll=fc.scrollTop; fc.scrollTop=0; var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); var hiddenCanvas=null; if(fc.scrollHeight>fc.clientHeight){ var saltoScroll=fc.clientHeight; var ultimoCompleto=null; Array.prototype.forEach.call(fc.children,function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= fc.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ saltoScroll=ultimoCompleto.offsetTop+ultimoCompleto.offsetHeight; } fc.scrollTop=saltoScroll; hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); } else { hiddenCanvas=visibleCanvas; } fc.scrollTop = originalScroll; var piz = new Image(); piz.onload = function(){ var width=piz.width, height=piz.height; var totalWidth = hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width; var finalCanvas=document.createElement('canvas'); finalCanvas.width=totalWidth; finalCanvas.height=height; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(piz,0,0,width,height); ctx.drawImage(visibleCanvas,0,0,width,height); if(hiddenCanvas && hiddenCanvas!==visibleCanvas){ ctx.drawImage(piz,width,0,width,height); ctx.drawImage(hiddenCanvas,width,0,width,height); } var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_'); if(!fname) fname='escuela'; fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.onerror=function(){ var ancho=visibleCanvas.width, alto=visibleCanvas.height; var finalCanvas=document.createElement('canvas'); finalCanvas.width=ancho; finalCanvas.height=alto; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(visibleCanvas,0,0,ancho,alto); var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png'; }; } var volverBtn=root.querySelector('.popup-volver-btn'); if(volverBtn){ volverBtn.onclick=function(ev){ ev.stopPropagation(); if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); } }; } }
-    function showSchoolOverlay(html,p){ var ov=document.getElementById('schoolOverlay'); var inner=document.getElementById('schoolOverlayInner'); if(!ov||!inner) return; inner.innerHTML=html; ov.style.paddingTop='0'; ov.classList.add('active'); wirePopupInteractions(inner,p,true); }
+    function showSchoolOverlay(html,p){ var ov=document.getElementById('schoolOverlay'); var inner=document.getElementById('schoolOverlayInner'); if(!ov||!inner) return; inner.innerHTML=html; ov.style.paddingTop='0'; ov.classList.add('active'); if(window.wirePopupInteractions){ window.wirePopupInteractions(inner,p,true); } }
     function startApp(){ var s=document.getElementById('splash'); var t=document.querySelector('.splash-texts-container'); var m=document.getElementById('mainApp'); var f=document.getElementById('flagContainer'); var e=document.getElementById('easterEgg'); if(s) s.style.display='none'; if(t) t.style.display='none'; if(f) f.style.display='none'; if(e) e.style.display='none'; if(m) m.style.display='block'; window.inSplashScreen=false; setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 350); }
     (function(){ var clickCount=0; var hideTimer=null; var circle=document.querySelector('.circle-bounce'); var btn=document.getElementById('startBtn'); function isOutside(t){ return !(circle&&circle.contains(t)) && !(btn&&btn.contains(t)); } function isInSplash(){ return window.inSplashScreen!==false; } function showEgg(){ var egg=document.getElementById('easterEgg'); if(!egg) return; egg.style.display='flex'; if(hideTimer) clearTimeout(hideTimer); hideTimer=setTimeout(function(){ egg.style.display='none'; }, 4000); } function showFlag(){ var flag=document.getElementById('flagContainer'); var circle=document.querySelector('.circle-bounce'); if(!flag || !circle) return; circle.style.display='none'; flag.style.display='block'; 
       // Detectar si es móvil
@@ -609,31 +663,380 @@
     map.createPane('localitiesGlowPane'); map.getPane('localitiesGlowPane').style.zIndex = 330;
     map.createPane('localitiesPane'); map.getPane('localitiesPane').style.zIndex = 331;
     map.createPane('railwaysPane'); map.getPane('railwaysPane').style.zIndex = 332;
+    map.createPane('busRoutesPane'); map.getPane('busRoutesPane').style.zIndex = 333;
     function normalizeLocalidadName(s){ if(!s) return ''; var t=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' '); var m={ 'josé melchor romero':'melchor romero','jose melchor romero':'melchor romero','melchor romero':'melchor romero','villa montoro':'villa elvira','la cumbre':'san carlos' }; var canon=m[t]||t; return canon.replace(/(^|\s)\S/g,function(x){ return x.toUpperCase(); }); }
     function getColorByLevel(n){ if(!n) return '#757575'; var s=n.toLowerCase(); if(s.includes('inicial')) return '#0074D9'; if(s.includes('primaria')) return '#2ECC40'; if(s.includes('secundaria')) return '#FF4136'; if(s.includes('superior')) return '#FFDC00'; if(s.includes('artística')) return '#B10DC9'; if(s.includes('técnicas y agrarias')) return '#3D9970'; if(s.includes('técnica')) return '#FF851B'; if(s.includes('ciclo medio')) return '#7FDBFF'; if(s.includes('ciclo de iniciación')) return '#39CCCC'; if(s.includes('cursos y talleres')) return '#F012BE'; if(s.includes('adultos')) return '#8E44AD'; if(s.includes('jardín maternal')||s.includes('jardin maternal')) return '#3399FF'; var h=0; for(var i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return 'hsl('+(h%360)+', 70%, 55%)'; }
+    function getBusRouteColorKey(props){ if(!props) return ''; return String(props.ref||props.name||props.operator||props.network||''); }
+    function getBusRouteLabel(props){
+      if(!props) return '';
+      var ref=String(props.ref||'').trim();
+      var name=String(props.name||'').trim();
+      var op=String(props.operator||'').trim();
+      if(ref){
+        var upper=ref.toUpperCase();
+        var m=upper.match(/^(\d+)\s*([A-ZÁÉÍÓÚÑ0-9]+)?$/);
+        if(m){
+          var num=m[1];
+          var suf=m[2]||'';
+          return suf ? (num+' '+suf) : num;
+        }
+        return upper;
+      }
+      if(name){
+        var idx=name.indexOf(':');
+        if(idx!==-1) name=name.slice(0,idx);
+        name=name.replace(/\bRamal\b/gi,'').replace(/\s{2,}/g,' ').trim();
+        return name;
+      }
+      if(op) return op;
+      return '';
+    }
+    function getBusRouteColorFromKey(key){ if(!key) return '#cc00cc'; var s=String(key).toLowerCase(); var h=0; for(var i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return 'hsl('+(h%360)+', 80%, 45%)'; }
+    function styleBusRoute(feature){ var p=feature&&feature.properties; var key=getBusRouteColorKey(p); var color=getBusRouteColorFromKey(key); return { color:color, weight:2.5, opacity:0.9, pane:'busRoutesPane' }; }
+    function busRegionBBox(){ return { minLat:-35.20, maxLat:-34.60, minLon:-58.30, maxLon:-57.30 }; }
+    function busInBBox(pt,b){ var lat=pt[0], lon=pt[1]; return lat>=b.minLat && lat<=b.maxLat && lon>=b.minLon && lon<=b.maxLon; }
+    function busClipPolyline(latlngs,b){ var segs=[]; var cur=[]; for(var i=0;i<latlngs.length;i++){ var pt=latlngs[i]; if(busInBBox(pt,b)){ cur.push(pt); } else { if(cur.length>1){ segs.push(cur); } cur=[]; } } if(cur.length>1) segs.push(cur); return segs; }
+    function loadBusRoutesIfNeeded(){
+      if(busRoutesDataLoaded||busRoutesLayer) return Promise.resolve();
+      return fetch('recorridos_lp.geojson',{ cache:'no-store' })
+        .then(function(r){ if(!r||!r.ok) throw new Error('no-data'); return r.json(); })
+        .then(function(gj){
+        var rawFeatures=[];
+        if(Array.isArray(gj.features)){ rawFeatures=rawFeatures.concat(gj.features); }
+        else if(gj.type==='FeatureCollection' && Array.isArray(gj.features)){ rawFeatures=rawFeatures.concat(gj.features); }
+        else { rawFeatures.push({ type:'Feature', properties:gj.properties||{}, geometry:gj.geometry||null }); }
+        var b=busRegionBBox();
+        var baseSegments=[];
+        var keySamples={};
+        rawFeatures.forEach(function(f){
+          if(!f||!f.geometry) return;
+          var g=f.geometry;
+          var props=f.properties||{};
+          var key=getBusRouteColorKey(props);
+          if(!key) key='(sin identificador)';
+          props._busKey=key;
+          if(g.type==='LineString' && Array.isArray(g.coordinates)){
+            var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; });
+            var segs=busClipPolyline(latlngs,b);
+            if(segs.length===0) return;
+            segs.forEach(function(seg){
+              var coords=seg.map(function(p){ return [p[1],p[0]]; });
+              baseSegments.push({ type:'Feature', properties:props, geometry:{ type:'LineString', coordinates:coords } });
+            });
+          } else if(g.type==='MultiLineString' && Array.isArray(g.coordinates)){
+            g.coordinates.forEach(function(line){
+              if(!Array.isArray(line)) return;
+              var latlngs=line.map(function(c){ return [c[1],c[0]]; });
+              var segs=busClipPolyline(latlngs,b);
+              if(segs.length===0) return;
+              segs.forEach(function(seg){
+                var coords=seg.map(function(p){ return [p[1],p[0]]; });
+                baseSegments.push({ type:'Feature', properties:props, geometry:{ type:'LineString', coordinates:coords } });
+              });
+            });
+          }
+        });
+        if(baseSegments.length===0) throw new Error('no-data');
+        busRoutesAllFeatures=baseSegments;
+        baseSegments.forEach(function(f){ var p=f.properties||{}; var k=String(p._busKey||''); if(!k) return; if(!keySamples[k]) keySamples[k]=p; });
+        busRouteKeys=Object.keys(keySamples);
+        busRouteKeySamples=keySamples;
+        busRoutesDataLoaded=true;
+        populateBusRouteSelect();
+        rebuildBusRoutesLayer();
+      }).catch(function(err){ return Promise.reject(err); });
+    }
+    function populateBusRouteSelect(){
+      var sel=busRouteSelect;
+      if(!sel) return;
+      sel.innerHTML='';
+      var keys=Array.isArray(busRouteKeys)?busRouteKeys.slice():[];
+      if(keys.length===0){ sel.style.display='none'; return; }
+      keys.sort(function(a,b){ return String(a).localeCompare(String(b),'es'); });
+      var optAll=document.createElement('option'); optAll.value=''; optAll.textContent='Todas las líneas'; sel.appendChild(optAll);
+      keys.forEach(function(k){
+        var props=busRouteKeySamples&&busRouteKeySamples[k];
+        var label=getBusRouteLabel(props);
+        var o=document.createElement('option'); o.value=k; o.textContent=label; sel.appendChild(o);
+      });
+      sel.value='';
+      sel.style.display='';
+    }
+    function getCurrentBusBBox(){
+      var d=(distritoSelect&&distritoSelect.value)||'';
+      var loc=(localidadSelect&&localidadSelect.value)||'';
+      if(!d) return busRegionBBox();
+      var bbox=null;
+      var locKey=(loc||'').trim().toLowerCase();
+      var useCasco=locKey==='casco urbano';
+      allSchools.forEach(function(f){
+        var p=f.properties||{};
+        if((p.distrito||'')!==d) return;
+        var ln=(p.localidad_norm||'').trim().toLowerCase();
+        if(locKey){
+          if(useCasco){
+            if(ln!=='la plata') return;
+          } else {
+            if(ln!==locKey) return;
+          }
+        }
+        var g=f.geometry;
+        if(!g||!Array.isArray(g.coordinates)) return;
+        var lon=Number(g.coordinates[0]);
+        var lat=Number(g.coordinates[1]);
+        if(isNaN(lat)||isNaN(lon)) return;
+        if(!bbox){
+          bbox={ minLat:lat, maxLat:lat, minLon:lon, maxLon:lon };
+        } else {
+          if(lat<bbox.minLat) bbox.minLat=lat;
+          if(lat>bbox.maxLat) bbox.maxLat=lat;
+          if(lon<bbox.minLon) bbox.minLon=lon;
+          if(lon>bbox.maxLon) bbox.maxLon=lon;
+        }
+      });
+      if(!bbox) return busRegionBBox();
+      var m=0.02;
+      return { minLat:bbox.minLat-m, maxLat:bbox.maxLat+m, minLon:bbox.minLon-m, maxLon:bbox.maxLon+m };
+    }
+    function busDistanceMeters(lat1,lng1,lat2,lng2){
+      var R=6371000;
+      var toRad=function(x){ return x*Math.PI/180; };
+      var dLat=toRad(lat2-lat1);
+      var dLng=toRad(lng2-lng1);
+      var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+      var c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+      return R*c;
+    }
+    function busPointToSegmentDistance(lat,lng,lat1,lng1,lat2,lng2){
+      var toRad=function(x){ return x*Math.PI/180; };
+      var R=6371000;
+      var phi1=toRad(lat1), phi2=toRad(lat2), phiP=toRad(lat);
+      var lambda1=toRad(lng1), lambda2=toRad(lng2), lambdaP=toRad(lng);
+      var Ax=R*Math.cos(phi1)*Math.cos(lambda1);
+      var Ay=R*Math.cos(phi1)*Math.sin(lambda1);
+      var Az=R*Math.sin(phi1);
+      var Bx=R*Math.cos(phi2)*Math.cos(lambda2);
+      var By=R*Math.cos(phi2)*Math.sin(lambda2);
+      var Bz=R*Math.sin(phi2);
+      var Px=R*Math.cos(phiP)*Math.cos(lambdaP);
+      var Py=R*Math.cos(phiP)*Math.sin(lambdaP);
+      var Pz=R*Math.sin(phiP);
+      var ABx=Bx-Ax, ABy=By-Ay, ABz=Bz-Az;
+      var APx=Px-Ax, APy=Py-Ay, APz=Pz-Az;
+      var ab2=ABx*ABx+ABy*ABy+ABz*ABz;
+      if(!ab2){ var dx=Px-Ax, dy=Py-Ay, dz=Pz-Az; return Math.sqrt(dx*dx+dy*dy+dz*dz); }
+      var t=(APx*ABx+APy*ABy+APz*ABz)/ab2;
+      if(t<0)t=0; else if(t>1)t=1;
+      var Cx=Ax+ABx*t, Cy=Ay+ABy*t, Cz=Az+ABz*t;
+      var dx=Px-Cx, dy=Py-Cy, dz=Pz-Cz;
+      return Math.sqrt(dx*dx+dy*dy+dz*dz);
+    }
+    function rebuildBusRoutesLayer(){
+      if(!busRoutesDataLoaded||!busRoutesAllFeatures||busRoutesAllFeatures.length===0) return;
+      var b=getCurrentBusBBox();
+      var selKey = busRouteSelect ? String(busRouteSelect.value||'') : '';
+      var features=[];
+      busRoutesAllFeatures.forEach(function(f){
+        if(!f||!f.geometry) return;
+        var g=f.geometry;
+        var p=f.properties||{};
+        if(selKey){
+          var k=getBusRouteColorKey(p);
+          if(String(k)!==selKey) return;
+        }
+        if(g.type!=='LineString'||!Array.isArray(g.coordinates)) return;
+        var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; });
+        var segs=busClipPolyline(latlngs,b);
+        if(segs.length===0) return;
+        segs.forEach(function(seg){
+          var coords=seg.map(function(p){ return [p[1],p[0]]; });
+          features.push({ type:'Feature', properties:f.properties||{}, geometry:{ type:'LineString', coordinates:coords } });
+        });
+      });
+      if(busRoutesLayer){ if(map.hasLayer(busRoutesLayer)) map.removeLayer(busRoutesLayer); busRoutesLayer=null; }
+      if(features.length===0) return;
+      var merged={ type:'FeatureCollection', features:features };
+      busRoutesLayer=L.geoJSON(merged,{ style:styleBusRoute, onEachFeature:function(feat,layer){ var p=feat&&feat.properties; var label=getBusRouteLabel(p); try{ layer.bindTooltip(label,{ permanent:false, direction:'auto', sticky:true }); }catch(e){} } });
+      if(busRoutesVisible){ busRoutesLayer.addTo(map); }
+    }
+    function highlightBusRoutesForSchool(lat,lng){
+      if(!busRoutesDataLoaded){
+        loadBusRoutesIfNeeded().then(function(){ highlightBusRoutesForSchool(lat,lng); });
+        return;
+      }
+      var MAX_CERCA=300;
+      var MAX_LEJOS=1000;
+      var near=[];
+      busRoutesAllFeatures.forEach(function(f){
+        if(!f||!f.geometry||f.geometry.type!=='LineString') return;
+        var coords=f.geometry.coordinates||[];
+        if(!coords||coords.length<2) return;
+        var minDist=Infinity;
+        for(var i=0;i<coords.length-1;i++){
+          var c1=coords[i], c2=coords[i+1];
+          var d=busPointToSegmentDistance(lat,lng,c1[1],c1[0],c2[1],c2[0]);
+          if(d<minDist) minDist=d;
+          if(minDist<=MAX_LEJOS) break;
+        }
+        if(minDist<=MAX_LEJOS){
+          near.push({ feature:f, dist:minDist });
+        }
+      });
+      if(busRoutesHighlightLayer){ try{ map.removeLayer(busRoutesHighlightLayer); }catch(e){} busRoutesHighlightLayer=null; }
+      if(!near.length) return;
+      var useThreshold=MAX_CERCA;
+      var hasClose=near.some(function(x){ return x.dist<=MAX_CERCA; });
+      if(!hasClose) useThreshold=MAX_LEJOS;
+      var features=[];
+      near.forEach(function(x){
+        if(x.dist<=useThreshold){
+          features.push(x.feature);
+        }
+      });
+      if(!features.length) return;
+      var merged={ type:'FeatureCollection', features:features };
+      busRoutesHighlightLayer=L.geoJSON(merged,{ style:function(feat){ var p=feat&&feat.properties; var key=getBusRouteColorKey(p); var color=getBusRouteColorFromKey(key); return { color:color, weight:5, opacity:1, pane:'busRoutesPane' }; }, onEachFeature:function(feat,layer){ var p=feat&&feat.properties; var label=getBusRouteLabel(p); try{ layer.bindTooltip(label,{ permanent:true, direction:'top', offset:[0,-6], sticky:false, className:'bus-route-label' }); }catch(e){} } });
+      try{ busRoutesHighlightLayer.addTo(map); }catch(e){}
+    }
+    function updateBusRoutesVisibility(){ if(!busRoutesLayer) return; if(busRoutesVisible){ if(!map.hasLayer(busRoutesLayer)) busRoutesLayer.addTo(map); } else { if(map.hasLayer(busRoutesLayer)) map.removeLayer(busRoutesLayer); } }
+    function clearBusHighlight(){ if(busRoutesHighlightLayer){ try{ map.removeLayer(busRoutesHighlightLayer); }catch(e){} busRoutesHighlightLayer=null; } }
+    function getLineAndRamalForProps(props){
+      if(!props) return null;
+      var label=getBusRouteLabel(props);
+      if(!label) return null;
+      var parts=label.split(/\s+/);
+      var line=parts.shift()||'';
+      var ramal=parts.join(' ').trim();
+      if(!line) return null;
+      var lineUpper=line.toUpperCase();
+      if(ramal){
+        var rTrim=ramal.trim();
+        var ru=rTrim.toUpperCase();
+        if(ru.indexOf(lineUpper+' ')===0){
+          rTrim=rTrim.slice(line.length).trim();
+        }
+        if(/^ramal\s+/i.test(rTrim)){
+          rTrim=rTrim.replace(/^ramal\s+/i,'').trim();
+        }
+        var tokens=rTrim.split(/\s+/).filter(function(t){ return t && t.toUpperCase()!==lineUpper; });
+        rTrim=tokens.join(' ');
+        ramal=rTrim;
+      }
+      return { line:line, ramal:ramal };
+    }
+    function computeBusSummaryForSchool(lat,lng){
+      if(!busRoutesDataLoaded||!Array.isArray(busRoutesAllFeatures)||busRoutesAllFeatures.length===0) return '';
+      if(isNaN(lat)||isNaN(lng)) return '';
+      var groups={};
+      var MAX_CERCA=300;
+      var MAX_LEJOS=1000;
+      var near=[];
+      busRoutesAllFeatures.forEach(function(f){
+        try{
+          var g=f&&f.geometry;
+          if(!g||g.type!=='LineString'||!Array.isArray(g.coordinates)) return;
+          var coords=g.coordinates;
+          if(!coords||coords.length<2) return;
+          var best=Infinity;
+          for(var i=0;i<coords.length-1;i++){
+            var c1=coords[i], c2=coords[i+1];
+            var d=busPointToSegmentDistance(lat,lng,c1[1],c1[0],c2[1],c2[0]);
+            if(d<best) best=d;
+            if(best<=MAX_LEJOS) break;
+          }
+          if(best<=MAX_LEJOS){
+            near.push({ feature:f, dist:best });
+          }
+        }catch(e){}
+      });
+      if(!near.length) return '';
+      var useThreshold=MAX_CERCA;
+      var hasClose=near.some(function(x){ return x.dist<=MAX_CERCA; });
+      if(!hasClose) useThreshold=MAX_LEJOS;
+      near.forEach(function(x){
+        if(x.dist>useThreshold) return;
+        var lr=getLineAndRamalForProps((x.feature&&x.feature.properties)||{});
+        if(!lr||!lr.line) return;
+        if(!groups[lr.line]) groups[lr.line]={ line:lr.line, ramales:new Set() };
+        if(lr.ramal){ groups[lr.line].ramales.add(lr.ramal); }
+      });
+      var keys=Object.keys(groups);
+      if(!keys.length) return '';
+      keys.sort(function(a,b){
+        var na=parseFloat(a.replace(/[^0-9.]/g,'')); var nb=parseFloat(b.replace(/[^0-9.]/g,''));
+        if(!isNaN(na)&&!isNaN(nb)&&na!==nb) return na-nb;
+        return a.localeCompare(b,'es');
+      });
+      var parts=[];
+      keys.forEach(function(k){
+        var g=groups[k];
+        if(!g) return;
+        var txt=String(g.line||'').trim();
+        var rams=Array.from(g.ramales||[]);
+        rams=rams.filter(function(r){ return r&&r.trim(); });
+        if(rams.length){
+          if(txt){ txt+=': '; }
+          txt+=rams.join(', ');
+        }
+        parts.push(txt);
+      });
+      return parts.join(' | ');
+    }
+    function normalizeComoLlegoText(str){
+      var s=String(str||'');
+      if(!s) return s;
+      s=s.replace(/L[íi]nea\s+/gi,'');
+      var firstCuad=null;
+      s=s.replace(/\b(a\s+[\w\d]+\s+cuadras?\b[^.;,)]*)/gi,function(m){
+        if(firstCuad===null){
+          firstCuad=m;
+          return m;
+        }
+        return '';
+      });
+      return s.replace(/\s{2,}/g,' ').trim();
+    }
+    function updateComoLlegoForRoot(root,lat,lng){
+      try{
+        if(!root) return;
+        var span=root.querySelector('.field-line-comollego .comollego-text');
+        if(!span) return;
+        loadBusRoutesIfNeeded().then(function(){
+          var txt=computeBusSummaryForSchool(lat,lng);
+          if(txt){ span.textContent=txt; } else { span.textContent=normalizeComoLlegoText(span.textContent||''); }
+        }).catch(function(){
+          span.textContent=normalizeComoLlegoText(span.textContent||'');
+        });
+      }catch(e){}
+    }
     function clearMarkers(){ markers.forEach(function(m){ map.removeLayer(m); }); markers=[]; }
     function renderMarkers(arr){ var a=Array.isArray(arr)?arr:[]; clearMarkers(); a.forEach(function(f){ try{ var p=f.properties||{}; var lat=NaN,lng=NaN; if(f.geometry&&Array.isArray(f.geometry.coordinates)){ lng=Number(f.geometry.coordinates[0]); lat=Number(f.geometry.coordinates[1]); } if(isNaN(lat)||isNaN(lng)){ lat=Number(p.latitud||p.lat||p.latitude); lng=Number(p.longitud||p.lng||p.longitude); } if(isNaN(lat)||isNaN(lng)) return; var nivel=(p.nivel||''); var nombreStr=String(p.nombre||''); var tipoStr=String(p.tipo_organizacion||''); var color=getColorByLevel(nivel); if(nombreStr.includes('adultos')||nombreStr.includes('Adultos')||nombreStr.includes('ADULTOS')){ color='#8E44AD'; } if( nombreStr.includes('JARDÍN MATERNAL')||nombreStr.includes('JARDIN MATERNAL')||nombreStr.includes('Jardín Maternal')||nombreStr.includes('Jardin Maternal')|| tipoStr.includes('JARDÍN MATERNAL')||tipoStr.includes('JARDIN MATERNAL') ){ color='#3399FF'; } var m=L.circleMarker([lat,lng],{ color:color, fillColor:color, radius:12, weight:3, fillOpacity:0.85, opacity:1 }).addTo(map);
         var toUp=function(x){ return String(x||'').toLocaleUpperCase('es-ES'); };
-        var datosHtml="<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar imagen'>💾</button><div class='frame-content'>";
+        var datosHtml="<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar ficha'>💾</button><div class='frame-content'>";
+        datosHtml += "<div class='general-fields'>";
         datosHtml += "<div class='name-tag'>"+escapeHtml(String(p.nombre||''))+"</div>";
         datosHtml += "<div class='field-line'><b>NÚMERO DE ESCUELA:</b> "+escapeHtml(String(p.nro_escuela||''))+"</div>";
         var dirVal = String(p.calle||''); var puerta = String(p.numero||'').trim(); if(puerta){ dirVal = dirVal ? (dirVal + ' ' + puerta) : puerta; }
         datosHtml += "<div class='field-line'><b>DIRECCIÓN:</b> "+escapeHtml(dirVal)+"</div>";
-        datosHtml += "<div class='field-line'><b>CÓMO LLEGO:</b> "+escapeHtml(String(p['COMO LLEGO']||''))+"</div>";
-        datosHtml += "<div class='field-line'><b>DESFAVORABILIDAD:</b> "+escapeHtml(String(p.desfavorabilidad||''))+"</div>";
+        var desfRaw=String(p.desfavorabilidad||'').trim(); if(!desfRaw){ desfRaw='No'; }
+        datosHtml += "<div class='field-line'><b>DESFAVORABILIDAD:</b> "+escapeHtml(desfRaw)+"</div>";
         datosHtml += "<div class='field-line'><b>DISTRITO:</b> "+escapeHtml(String(p.distrito||''))+"</div>";
         datosHtml += "<div class='field-line'><b>LOCALIDAD:</b> "+escapeHtml(String(p.localidad||''))+"</div>";
         datosHtml += "<div class='field-line'><b>NIVEL:</b> "+escapeHtml(String(p.nivel||''))+"</div>";
         datosHtml += "<div class='field-line'><b>CLAVE:</b> "+escapeHtml(String(p.clave||''))+"</div>";
+        datosHtml += "</div>";
+        var comoRaw=String(p['COMO LLEGO']||''); var comoNorm=normalizeComoLlegoText(comoRaw);
+        datosHtml += "<div class='como-fields'><div class='field-line field-line-comollego'><b>CÓMO LLEGO:</b> <span class='comollego-text'>"+escapeHtml(comoNorm)+"</span></div></div>";
         datosHtml += "</div><button type='button' class='popup-volver-btn'>VOLVER</button></div>";
         if(isMobilePortrait()){
-          m.on('click', function(){ onPopupOpenCommon(); showSchoolOverlay(datosHtml,p); });
+          m.on('click', function(){ onPopupOpenCommon(); showSchoolOverlay(datosHtml,p); highlightBusRoutesForSchool(lat,lng); updateComoLlegoForRoot(document.getElementById('schoolOverlayInner'),lat,lng); });
         } else {
           m.bindPopup(datosHtml,{ closeButton:false, autoClose:true, closeOnClick:true, autoPan:false });
-          m.on('popupopen', function(){ onPopupOpenCommon(); var content=document.querySelector('.leaflet-popup-content'); if(!content) return; wirePopupInteractions(content,p,false); });
+          m.on('popupopen', function(){ onPopupOpenCommon(); var content=document.querySelector('.leaflet-popup-content'); if(!content) return; if(window.wirePopupInteractions){ window.wirePopupInteractions(content,p,false); } highlightBusRoutesForSchool(lat,lng); updateComoLlegoForRoot(content,lat,lng); });
+          m.on('popupclose', function(){ if(typeof clearBusHighlight==='function'){ try{ clearBusHighlight(); }catch(e){} } });
         }
         markers.push(m); }catch(e){} }); var c=document.getElementById('counter'); if(c) c.textContent=String(a.length); }
-    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var clearSearchBtn=document.getElementById('clearSearchBtn'); var levelAll=null; var levelChecks=[];
+    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var clearSearchBtn=document.getElementById('clearSearchBtn'); var levelAll=null; var levelChecks=[]; var toggleBusRoutesBtn=document.getElementById('toggleBusRoutesBtn'); var busRouteSelect=document.getElementById('busRouteSelect');
     function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g,function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]; }); }
     function setClearSearchVisible(){ if(!clearSearchBtn||!searchInput) return; var wrap=clearSearchBtn.parentNode; if(!wrap || !wrap.classList) return; wrap.classList.toggle('has-text', String(searchInput.value||'').length>0); }
     function updateLevelsBadgeCount(){ var btn=document.getElementById('levelsHeaderBtn'); if(!btn) return; var total=Array.isArray(levelChecks)?levelChecks.length:0; var count=(levelAll && levelAll.checked) ? total : levelChecks.filter(function(cb){ return cb.checked; }).length; btn.setAttribute('data-count', String(count)); }
@@ -651,8 +1054,10 @@
       if(localidad){ var locSel = localidad.trim().toLowerCase(); if(locSel==='casco urbano'){ filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()==='la plata'; }); } else { filtered = filtered.filter(function(f){ return ((f.properties&&f.properties.localidad_norm)||'').trim().toLowerCase()===locSel; }); } }
       if(text){ filtered = filtered.filter(function(f){ var p=f.properties||{}; return (p.nombre||'').toLowerCase().includes(text) || (p.numero||'').toString().toLowerCase().includes(text) || (p.nivel||'').toLowerCase().includes(text) || (p.localidad||'').toLowerCase().includes(text) || (p.localidad_norm||'').toLowerCase().includes(text); }); }
       clearMarkers(); renderMarkers(filtered); var c=document.getElementById('counter'); if(c) c.textContent=filtered.length; updateLevelsBadgeCount(); }
+    if(toggleBusRoutesBtn){ toggleBusRoutesBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} busRoutesVisible=!busRoutesVisible; if(busRoutesVisible){ toggleBusRoutesBtn.classList.add('active'); if(busRoutesDataLoaded){ updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.style.display=''; } } else { loadBusRoutesIfNeeded().then(function(){ updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.style.display=''; } }).catch(function(){ busRoutesVisible=false; toggleBusRoutesBtn.classList.remove('active'); }); } } else { toggleBusRoutesBtn.classList.remove('active'); updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.value=''; busRouteSelect.style.display='none'; } } }); }
+    if(busRouteSelect){ busRouteSelect.addEventListener('change', function(){ if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); }
     if(clearSearchBtn){ clearSearchBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} if(!searchInput) return; searchInput.value=''; setClearSearchVisible(); filterSchools(); try{ searchInput.focus(); }catch(e){} }); }
-    distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); }); } searchInput.addEventListener('input', function(){ setClearSearchVisible(); filterSchools(); }); setClearSearchVisible();
+    distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); } searchInput.addEventListener('input', function(){ setClearSearchVisible(); filterSchools(); }); setClearSearchVisible();
     function isPolygonGeojson(g){ return !!g && (g.type==='Polygon' || g.type==='MultiPolygon'); }
     function addBoundaryGeoJSON(geojson){ try{ var glow=L.geoJSON(geojson,{ pane:'boundariesGlowPane', color:'#ff0033', weight:28, opacity:0.22, fill:false }).addTo(map); var sharp=L.geoJSON(geojson,{ pane:'boundariesPane', color:'#ff0033', weight:3, opacity:0.9, fill:false }).addTo(map); boundaryLayers.push(glow); boundaryLayers.push(sharp); }catch(e){} }
     function tryLoadMunicipalBoundaries(){ return fetch('municipios_boundaries.geojson').then(function(r){ if(!r||!r.ok) return null; return r.json(); }).then(function(gj){ if(!gj) return false; var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; var n=f&&f.properties&&f.properties.name; if(g&&isPolygonGeojson(g)){ municipioGeomByName[(n||'').toLowerCase()]=g; } }); Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); return true; }).catch(function(){ return false; }); }
@@ -660,11 +1065,11 @@
     function clearBoundaryLayers(){ try{ boundaryLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); boundaryLayers=[]; }catch(e){} }
     function clearLocalityLayers(){ try{ localityLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); localityLayers=[]; }catch(e){} }
     function setBoundariesHidden(h){ boundariesHidden=!!h; var btn=document.getElementById('toggleBoundariesVisibilityBtn'); if(btn){ btn.title = boundariesHidden ? 'Mostrar límites' : 'Ocultar límites'; } updateDisplayForSelectedDistrict(); }
-    function tryLoadLocalBoundaryLines(){ return fetch('localidades_limites_lineas.geojson', { cache:'no-store' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(g&&g.type==='LineString'&&Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var layer=L.polyline(latlngs,{ pane:'railwaysPane', color:'#0062cc', weight:2, opacity:0.9 }); railwayLayers.push(layer); } }); return true; }).catch(function(){ return false; }); }
-    function addLocalityBoundariesLaPlata(){ if(Array.isArray(cachedLocalitiesLP)){ cachedLocalitiesLP.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#0062cc', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.8, fill:false }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.9 }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); return Promise.resolve(true); }
-      return fetch('localidades_la_plata.geojson', { cache:'force-cache' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#0062cc', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.8, fill:false }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#0062cc', weight:2, opacity:0.9 }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); cachedLocalitiesLP=feats; return true; }).catch(function(){ return false; }); }
+    function tryLoadLocalBoundaryLines(){ return fetch('localidades_limites_lineas.geojson', { cache:'no-store' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(g&&g.type==='LineString'&&Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var layer=L.polyline(latlngs,{ pane:'railwaysPane', color:'#666666', weight:1.5, opacity:0.9, dashArray:'4,6' }); railwayLayers.push(layer); } }); return true; }).catch(function(){ return false; }); }
+    function addLocalityBoundariesLaPlata(){ if(Array.isArray(cachedLocalitiesLP)){ cachedLocalitiesLP.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#00aaff', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, fill:false, dashArray:'6,4' }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, dashArray:'6,4' }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); return Promise.resolve(true); }
+      return fetch('localidades_la_plata.geojson', { cache:'force-cache' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#00aaff', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, fill:false, dashArray:'6,4' }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, dashArray:'6,4' }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); cachedLocalitiesLP=feats; return true; }).catch(function(){ return false; }); }
     function updateDisplayForSelectedDistrict(){ try{ clearBoundaryLayers(); clearLocalityLayers(); if(boundariesHidden){ railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); return; } var dist=(distritoSelect&&distritoSelect.value)||''; var distKey=(dist||'').trim().toLowerCase(); if(!distKey){ Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='la plata'){ if(municipioGeomByName['la plata']) addBoundaryGeoJSON(municipioGeomByName['la plata']); railwayLayers.forEach(function(l){ try{ l.addTo(map); }catch(e){} }); addLocalityBoundariesLaPlata(); } else if(distKey==='berisso'){ if(municipioGeomByName['berisso']) addBoundaryGeoJSON(municipioGeomByName['berisso']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='ensenada'){ if(municipioGeomByName['ensenada']) addBoundaryGeoJSON(municipioGeomByName['ensenada']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } }catch(e){} }
-    fetch('camposfiltrados.geojson').then(function(r){ return r.ok?r.text():Promise.resolve('{}'); }).then(function(text){ var data; try{ data=JSON.parse(text); }catch(_){ data={ features:[] }; } if(!data||!data.features) data={ features:[] }; allSchools=data.features.map(function(f){ var p=f.properties||{}; var hasGeom=f.geometry&&Array.isArray(f.geometry.coordinates); var lat=hasGeom?Number(f.geometry.coordinates[1]):Number(p.latitud||p.lat||p.latitude); var lng=hasGeom?Number(f.geometry.coordinates[0]):Number(p.longitud||p.lng||p.longitude); if(isNaN(lat)||isNaN(lng)){ var canon=normalizeLocalidadName(p.localidad||''); lat=-34.92; lng=-57.95; } f.geometry={ type:'Point', coordinates:[lng,lat] }; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; });
+    fetch('camposfiltrados.geojson').then(function(r){ return r.ok?r.text():Promise.resolve('{}'); }).then(function(text){ var data; try{ data=JSON.parse(text); }catch(_){ data={ features:[] }; } if(!data||!data.features) data={ features:[] }; allSchools=data.features.map(function(f){ var p=f.properties||{}; var hasGeom=f.geometry&&Array.isArray(f.geometry.coordinates); var lat=hasGeom?Number(f.geometry.coordinates[1]):Number(p.latitud||p.lat||p.latitude); var lng=hasGeom?Number(f.geometry.coordinates[0]):Number(p.longitud||p.lng||p.longitude); if(isNaN(lat)||isNaN(lng)){ var canon=normalizeLocalidadName(p.localidad||''); lat=-34.92; lng=-57.95; } f.geometry={ type:'Point', coordinates:[lng,lat] }; p._lat=lat; p._lng=lng; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; });
       var nivelesUnicos = Array.from(new Set(allSchools.map(function(e){ return (e.properties&&e.properties.nivel||'').trim(); }))).filter(function(n){ return n; });
       function normStr(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase(); }
       var nivelesLower = new Set(nivelesUnicos.map(function(n){ return normStr(n); }));
@@ -757,30 +1162,47 @@
           if(!targetFrame || typeof html2canvas==='undefined') return;
           var fc=targetFrame.querySelector('.frame-content');
           if(!fc) return;
+          var generalFields=targetFrame.querySelector('.general-fields');
+          var comoFields=targetFrame.querySelector('.como-fields');
+          var comoLine=targetFrame.querySelector('.field-line-comollego');
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
           var originalScroll=fc.scrollTop;
-          fc.scrollTop=0;
-          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
-          var hiddenCanvas=null;
-          if(fc.scrollHeight>fc.clientHeight){
-            var saltoScroll=fc.clientHeight;
-            var ultimoCompleto2=null;
-            Array.prototype.forEach.call(fc.children,function(child){
-              var childBottom=child.offsetTop+child.offsetHeight;
-              if(childBottom <= fc.clientHeight){
-                ultimoCompleto2=child;
-              }
-            });
-            if(ultimoCompleto2){
-              saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
+          var needsSplit=false;
+          if(generalFields && comoFields){
+            var prevGenDisplay=generalFields.style.display;
+            var prevComoDisplay=comoFields.style.display;
+            if(prevGenDisplay==='none') generalFields.style.display='';
+            if(prevComoDisplay==='none') comoFields.style.display='';
+            fc.scrollTop=0;
+            if(fc.scrollHeight>fc.clientHeight){
+              needsSplit=true;
             }
-            fc.scrollTop=saltoScroll;
-            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
-          } else {
-            hiddenCanvas=visibleCanvas;
+            generalFields.style.display=prevGenDisplay;
+            comoFields.style.display=prevComoDisplay;
           }
-          fc.scrollTop=originalScroll;
+          var visibleCanvas=null;
+          var hiddenCanvas=null;
+          if(needsSplit && generalFields && comoFields && comoLine){
+            var prevGenDisplay2=generalFields.style.display;
+            var prevComoDisplay2=comoFields.style.display;
+            fc.scrollTop=0;
+            comoFields.style.display='none';
+            generalFields.style.display='';
+            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            generalFields.style.display='none';
+            comoFields.style.display='';
+            fc.scrollTop=0;
+            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            generalFields.style.display=prevGenDisplay2;
+            comoFields.style.display=prevComoDisplay2;
+            fc.scrollTop=originalScroll;
+          } else {
+            fc.scrollTop=0;
+            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            hiddenCanvas=visibleCanvas;
+            fc.scrollTop=originalScroll;
+          }
           var piz=new Image();
           piz.onload=function(){
             var width=piz.width;
@@ -836,6 +1258,10 @@
           };
           piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
         };
+      }
+      var mapBtn=root.querySelector('.popup-map-capture-btn');
+      if(mapBtn){
+        try{ mapBtn.parentNode.removeChild(mapBtn); }catch(e){}
       }
       var volverBtn=root.querySelector('.popup-volver-btn');
       if(volverBtn){
