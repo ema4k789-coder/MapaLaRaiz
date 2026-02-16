@@ -4,7 +4,7 @@ Una aplicación web interactiva que muestra la ubicación de escuelas en La Plat
 
 ## 🌐 Demo Online
 
-Puedes ver la aplicación funcionando en: **https://ema4k789-coder.github.io/MapaDeEscuelasLaRaizV2/**
+Puedes ver la aplicación funcionando en: **https://ema4k789-coder.github.io/MapaLaRaiz/**
 
 ## ✨ Características
 
@@ -66,12 +66,12 @@ Si quieres ejecutar la aplicación localmente:
 
 1. **Clona el repositorio**
    ```bash
-   git clone https://github.com/ema4k789-coder/MapaDeEscuelasLaRaizV2.git
+   git clone https://github.com/ema4k789-coder/MapaLaRaiz.git
    ```
 
 2. **Navega al directorio**
    ```bash
-   cd MapaDeEscuelasLaRaizV2
+   cd MapaLaRaiz
    ```
 
 3. **Inicia un servidor local**
@@ -80,7 +80,7 @@ Si quieres ejecutar la aplicación localmente:
    ```
 
 4. **Abre en tu navegador**
-   Ve a `http://localhost:8080/main.html`
+   Ve a `http://localhost:8080/`
 
 ## 📋 Notas importantes
 
