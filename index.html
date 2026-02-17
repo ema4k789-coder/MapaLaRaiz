@@ -22,28 +22,6 @@
           window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
         }
       }
-      var frameContent=root.querySelector('.frame-content');
-      if(frameContent){
-        var scrollTimeout=null;
-        frameContent.addEventListener('scroll', function(){
-          if(scrollTimeout) clearTimeout(scrollTimeout);
-          scrollTimeout=setTimeout(function(){
-            var ultimoCompleto=null;
-            Array.prototype.forEach.call(frameContent.children, function(child){
-              var childBottom=child.offsetTop+child.offsetHeight;
-              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
-                ultimoCompleto=child;
-              }
-            });
-            if(ultimoCompleto){
-              var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight;
-              if(frameContent.scrollTop !== nuevoScroll){
-                frameContent.scrollTop=nuevoScroll;
-              }
-            }
-          },120);
-        });
-      }
       var dlBtn=root.querySelector('.popup-dl-btn');
       if(dlBtn){
         dlBtn.onclick = async function(ev){
@@ -927,8 +905,6 @@
     function computeBusSummaryForSchool(lat,lng){
       if(!busRoutesDataLoaded||!Array.isArray(busRoutesAllFeatures)||busRoutesAllFeatures.length===0) return '';
       if(isNaN(lat)||isNaN(lng)) return '';
-      var groups={};
-      var MAX_CERCA=300;
       var MAX_LEJOS=1000;
       var near=[];
       busRoutesAllFeatures.forEach(function(f){
@@ -950,23 +926,29 @@
         }catch(e){}
       });
       if(!near.length) return '';
-      var useThreshold=MAX_CERCA;
-      var hasClose=near.some(function(x){ return x.dist<=MAX_CERCA; });
-      if(!hasClose) useThreshold=MAX_LEJOS;
-      near.forEach(function(x){
-        if(x.dist>useThreshold) return;
+      near.sort(function(a,b){ return a.dist-b.dist; });
+      var groups={};
+      var maxLines=15;
+      for(var i=0;i<near.length;i++){
+        var x=near[i];
         var lr=getLineAndRamalForProps((x.feature&&x.feature.properties)||{});
-        if(!lr||!lr.line) return;
-        if(!groups[lr.line]) groups[lr.line]={ line:lr.line, ramales:new Set() };
-        if(lr.ramal){ groups[lr.line].ramales.add(lr.ramal); }
-      });
+        if(!lr||!lr.line) continue;
+        if(!groups[lr.line]) groups[lr.line]={ line:lr.line, ramales:new Set(), bestDist:x.dist };
+        var g=groups[lr.line];
+        if(x.dist<g.bestDist) g.bestDist=x.dist;
+        if(lr.ramal){ g.ramales.add(lr.ramal); }
+      }
       var keys=Object.keys(groups);
       if(!keys.length) return '';
       keys.sort(function(a,b){
+        var da=groups[a].bestDist;
+        var db=groups[b].bestDist;
+        if(da!==db) return da-db;
         var na=parseFloat(a.replace(/[^0-9.]/g,'')); var nb=parseFloat(b.replace(/[^0-9.]/g,''));
         if(!isNaN(na)&&!isNaN(nb)&&na!==nb) return na-nb;
         return a.localeCompare(b,'es');
       });
+      if(keys.length>maxLines){ keys=keys.slice(0,maxLines); }
       var parts=[];
       keys.forEach(function(k){
         var g=groups[k];
