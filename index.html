@@ -1212,28 +1212,6 @@
           window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
         }
       }
-      var frameContent=root.querySelector('.frame-content');
-      if(frameContent){
-        var scrollTimeout=null;
-        frameContent.addEventListener('scroll', function(){
-          if(scrollTimeout) clearTimeout(scrollTimeout);
-          scrollTimeout=setTimeout(function(){
-            var ultimoCompleto=null;
-            Array.prototype.forEach.call(frameContent.children, function(child){
-              var childBottom=child.offsetTop+child.offsetHeight;
-              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
-                ultimoCompleto=child;
-              }
-            });
-            if(ultimoCompleto){
-              var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight;
-              if(frameContent.scrollTop !== nuevoScroll){
-                frameContent.scrollTop=nuevoScroll;
-              }
-            }
-          },120);
-        });
-      }
       var dlBtn=root.querySelector('.popup-dl-btn');
       if(dlBtn){
         dlBtn.onclick = async function(ev){
@@ -1242,76 +1220,42 @@
           if(!targetFrame || typeof html2canvas==='undefined') return;
           var fc=targetFrame.querySelector('.frame-content');
           if(!fc) return;
-          var generalFields=targetFrame.querySelector('.general-fields');
-          var comoFields=targetFrame.querySelector('.como-fields');
-          var comoLine=targetFrame.querySelector('.field-line-comollego');
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
-          var originalScroll=fc.scrollTop;
-          var needsSplit=false;
-          if(generalFields && comoFields){
-            var prevGenDisplay=generalFields.style.display;
-            var prevComoDisplay=comoFields.style.display;
-            if(prevGenDisplay==='none') generalFields.style.display='';
-            if(prevComoDisplay==='none') comoFields.style.display='';
-            fc.scrollTop=0;
-            if(fc.scrollHeight>fc.clientHeight){
-              needsSplit=true;
-            }
-            generalFields.style.display=prevGenDisplay;
-            comoFields.style.display=prevComoDisplay;
-          }
-          var visibleCanvas=null;
-          var hiddenCanvas=null;
-          if(needsSplit && generalFields && comoFields && comoLine){
-            var prevGenDisplay2=generalFields.style.display;
-            var prevComoDisplay2=comoFields.style.display;
-            fc.scrollTop=0;
-            comoFields.style.display='none';
-            generalFields.style.display='';
-            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
-            generalFields.style.display='none';
-            comoFields.style.display='';
-            fc.scrollTop=0;
-            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
-            generalFields.style.display=prevGenDisplay2;
-            comoFields.style.display=prevComoDisplay2;
-            fc.scrollTop=originalScroll;
-          } else {
-            fc.scrollTop=0;
-            visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
-            hiddenCanvas=visibleCanvas;
-            fc.scrollTop=originalScroll;
-          }
+          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
           var piz=new Image();
           piz.onload=function(){
             var width=piz.width;
             var height=piz.height;
-            var totalWidth=hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width;
             var finalCanvas=document.createElement('canvas');
-            finalCanvas.width=totalWidth;
+            finalCanvas.width=width;
             finalCanvas.height=height;
             var ctx=finalCanvas.getContext('2d');
             ctx.drawImage(piz,0,0,width,height);
             ctx.drawImage(visibleCanvas,0,0,width,height);
-            if(hiddenCanvas && hiddenCanvas!==visibleCanvas){
-              ctx.drawImage(piz,width,0,width,height);
-              ctx.drawImage(hiddenCanvas,width,0,width,height);
-            }
             var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
             if(!fname) fname='escuela';
-            fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg';
+            fname+='.jpg';
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var a=document.createElement('a');
-              a.href=url;
-              a.download=fname;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
               URL.revokeObjectURL(url);
-              alert('Imagen descargada: '+fname);
             },'image/jpeg',0.92);
           };
           piz.onerror=function(){
@@ -1326,14 +1270,23 @@
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var a=document.createElement('a');
-              a.href=url;
-              a.download=fname;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
               URL.revokeObjectURL(url);
-              alert('Imagen descargada: '+fname);
             },'image/jpeg',0.92);
           };
           piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
