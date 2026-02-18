@@ -612,6 +612,104 @@
     function hideSchoolOverlay(){ var ov=document.getElementById('schoolOverlay'); if(ov){ ov.classList.remove('active'); } if(typeof clearBusHighlight==='function'){ try{ clearBusHighlight(); }catch(e){} } }
     function wirePopupInteractions(root,p,isOverlay){ if(!root) return; var frame=root.querySelector('.popup-frame'); var imgEl=root.querySelector('.frame-img'); if(frame && imgEl){ imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} }; if(window.getFrameURL){ window.getFrameURL().then(function(url){ if(url) imgEl.src=url; }); } } var frameContent=root.querySelector('.frame-content'); if(frameContent){ var scrollTimeout=null; frameContent.addEventListener('scroll', function(){ if(scrollTimeout) clearTimeout(scrollTimeout); scrollTimeout=setTimeout(function(){ var ultimoCompleto=null; Array.prototype.forEach.call(frameContent.children, function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ var nuevoScroll=ultimoCompleto.offsetTop + ultimoCompleto.offsetHeight - frameContent.clientHeight; if(frameContent.scrollTop !== nuevoScroll){ frameContent.scrollTop = nuevoScroll; } } }, 120); }); } var dlBtn=root.querySelector('.popup-dl-btn'); if(dlBtn){ dlBtn.onclick = async function(ev){ ev.stopPropagation(); var targetFrame=root.querySelector('.popup-frame'); if(!targetFrame || typeof html2canvas==='undefined') return; var fc=targetFrame.querySelector('.frame-content'); if(!fc) return; var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)); var scaleVal=isMobile?1.25:2; var originalScroll=fc.scrollTop; fc.scrollTop=0; var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); var hiddenCanvas=null; if(fc.scrollHeight>fc.clientHeight){ var saltoScroll=fc.clientHeight; var ultimoCompleto=null; Array.prototype.forEach.call(fc.children,function(child){ var childBottom=child.offsetTop+child.offsetHeight; if(childBottom <= fc.clientHeight){ ultimoCompleto=child; } }); if(ultimoCompleto){ saltoScroll=ultimoCompleto.offsetTop+ultimoCompleto.offsetHeight; } fc.scrollTop=saltoScroll; hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal }); } else { hiddenCanvas=visibleCanvas; } fc.scrollTop = originalScroll; var piz = new Image(); piz.onload = function(){ var width=piz.width, height=piz.height; var totalWidth = hiddenCanvas && hiddenCanvas!==visibleCanvas ? width*2 : width; var finalCanvas=document.createElement('canvas'); finalCanvas.width=totalWidth; finalCanvas.height=height; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(piz,0,0,width,height); ctx.drawImage(visibleCanvas,0,0,width,height); if(hiddenCanvas && hiddenCanvas!==visibleCanvas){ ctx.drawImage(piz,width,0,width,height); ctx.drawImage(hiddenCanvas,width,0,width,height); } var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_'); if(!fname) fname='escuela'; fname += (hiddenCanvas && hiddenCanvas!==visibleCanvas)?'_doble.jpg':'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.onerror=function(){ var ancho=visibleCanvas.width, alto=visibleCanvas.height; var finalCanvas=document.createElement('canvas'); finalCanvas.width=ancho; finalCanvas.height=alto; var ctx=finalCanvas.getContext('2d'); ctx.drawImage(visibleCanvas,0,0,ancho,alto); var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg'; var ua=(navigator.userAgent||''); var isIOS=/iPhone|iPad|iPod/i.test(ua); var isAndroid=/Android/i.test(ua); var isMobileDevice=isIOS||isAndroid; finalCanvas.toBlob(function(blob){ if(!blob) return; var url=URL.createObjectURL(blob); if(isMobileDevice){ try{ window.open(url,'_blank'); }catch(e){} setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000); alert('La imagen se abrió en una nueva pestaña: '+fname+' (usa Guardar imagen del navegador.)'); } else { var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert('Imagen descargada: '+fname); } }, 'image/jpeg', 0.92); }; piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png'; }; } var volverBtn=root.querySelector('.popup-volver-btn'); if(volverBtn){ volverBtn.onclick=function(ev){ ev.stopPropagation(); if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); } }; } }
     function showSchoolOverlay(html,p){ var ov=document.getElementById('schoolOverlay'); var inner=document.getElementById('schoolOverlayInner'); if(!ov||!inner) return; inner.innerHTML=html; ov.style.paddingTop='0'; ov.classList.add('active'); if(window.wirePopupInteractions){ window.wirePopupInteractions(inner,p,true); } }
+    window.wirePopupInteractions = function(root,p,isOverlay){
+      if(!root) return;
+      var frame=root.querySelector('.popup-frame');
+      var imgEl=root.querySelector('.frame-img');
+      if(frame && imgEl){
+        imgEl.onerror=function(){ try{ imgEl.remove(); }catch(e){} };
+        if(window.getFrameURL){
+          window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
+        }
+      }
+      var dlBtn=root.querySelector('.popup-dl-btn');
+      if(dlBtn){
+        dlBtn.onclick = async function(ev){
+          ev.stopPropagation();
+          var targetFrame=root.querySelector('.popup-frame');
+          if(!targetFrame || typeof html2canvas==='undefined') return;
+          var fc=targetFrame.querySelector('.frame-content');
+          if(!fc) return;
+          var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+          var scaleVal=isMobile?1.25:2;
+          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          var piz=new Image();
+          piz.onload=function(){
+            var width=piz.width;
+            var height=piz.height;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=width;
+            finalCanvas.height=height;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(piz,0,0,width,height);
+            ctx.drawImage(visibleCanvas,0,0,width,height);
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+            if(!fname) fname='escuela';
+            fname+='.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
+              URL.revokeObjectURL(url);
+            },'image/jpeg',0.92);
+          };
+          piz.onerror=function(){
+            var ancho=visibleCanvas.width;
+            var alto=visibleCanvas.height;
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=ancho;
+            finalCanvas.height=alto;
+            var ctx=finalCanvas.getContext('2d');
+            ctx.drawImage(visibleCanvas,0,0,ancho,alto);
+            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
+            finalCanvas.toBlob(function(blob){
+              if(!blob) return;
+              var url=URL.createObjectURL(blob);
+              var proto=(window.location&&window.location.protocol)||'';
+              var isHttps=proto.indexOf('https')===0;
+              var ua=(navigator&&navigator.userAgent)||'';
+              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
+              if(isHttps && isMobileDevice){
+                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
+                window.location.href=url;
+              } else {
+                var a=document.createElement('a');
+                a.href=url;
+                a.download=fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert('Imagen descargada: '+fname);
+              }
+              URL.revokeObjectURL(url);
+            },'image/jpeg',0.92);
+          };
+          piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
+        };
+      }
+      var volverBtn=root.querySelector('.popup-volver-btn');
+      if(volverBtn){
+        volverBtn.onclick=function(ev){
+          ev.stopPropagation();
+          if(isOverlay){ hideSchoolOverlay(); } else { map.closePopup(); }
+        };
+      }
+    };
     function startApp(){ var s=document.getElementById('splash'); var t=document.querySelector('.splash-texts-container'); var m=document.getElementById('mainApp'); var f=document.getElementById('flagContainer'); var e=document.getElementById('easterEgg'); if(s) s.style.display='none'; if(t) t.style.display='none'; if(f) f.style.display='none'; if(e) e.style.display='none'; if(m) m.style.display='block'; window.inSplashScreen=false; setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 350); }
     (function(){ var clickCount=0; var hideTimer=null; var circle=document.querySelector('.circle-bounce'); var btn=document.getElementById('startBtn'); function isOutside(t){ return !(circle&&circle.contains(t)) && !(btn&&btn.contains(t)); } function isInSplash(){ return window.inSplashScreen!==false; } function showEgg(){ var egg=document.getElementById('easterEgg'); if(!egg) return; egg.style.display='flex'; if(hideTimer) clearTimeout(hideTimer); hideTimer=setTimeout(function(){ egg.style.display='none'; }, 4000); } function showFlag(){ var flag=document.getElementById('flagContainer'); var circle=document.querySelector('.circle-bounce'); if(!flag || !circle) return; circle.style.display='none'; flag.style.display='block'; 
       // Detectar si es móvil
