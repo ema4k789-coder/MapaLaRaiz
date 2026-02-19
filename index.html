@@ -22,6 +22,28 @@
           window.getFrameURL().then(function(url){ if(url) imgEl.src=url; });
         }
       }
+      var frameContent=root.querySelector('.frame-content');
+      if(frameContent){
+        var scrollTimeout=null;
+        frameContent.addEventListener('scroll', function(){
+          if(scrollTimeout) clearTimeout(scrollTimeout);
+          scrollTimeout=setTimeout(function(){
+            var ultimoCompleto=null;
+            Array.prototype.forEach.call(frameContent.children, function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
+                ultimoCompleto=child;
+              }
+            });
+            if(ultimoCompleto){
+              var nuevoScroll=ultimoCompleto.offsetTop+ultimoCompleto.offsetHeight-frameContent.clientHeight;
+              if(frameContent.scrollTop!==nuevoScroll){
+                frameContent.scrollTop=nuevoScroll;
+              }
+            }
+          },120);
+        });
+      }
       var dlBtn=root.querySelector('.popup-dl-btn');
       if(dlBtn){
         dlBtn.onclick = async function(ev){
@@ -32,30 +54,54 @@
           if(!fc) return;
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
+          var originalScroll=fc.scrollTop||0;
+          fc.scrollTop=0;
           var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          var hiddenCanvas=null;
+          if(fc.scrollHeight>fc.clientHeight){
+            var saltoScroll=fc.clientHeight;
+            var ultimoCompleto2=null;
+            Array.prototype.forEach.call(fc.children,function(child){
+              var childBottom=child.offsetTop+child.offsetHeight;
+              if(childBottom <= fc.clientHeight){
+                ultimoCompleto2=child;
+              }
+            });
+            if(ultimoCompleto2){
+              saltoScroll=ultimoCompleto2.offsetTop+ultimoCompleto2.offsetHeight;
+            }
+            fc.scrollTop=saltoScroll;
+            hiddenCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          } else {
+            hiddenCanvas=visibleCanvas;
+          }
+          fc.scrollTop=originalScroll;
           var piz=new Image();
           piz.onload=function(){
             var width=piz.width;
             var height=piz.height;
+            var totalWidth=hiddenCanvas ? width*2 : width;
             var finalCanvas=document.createElement('canvas');
-            finalCanvas.width=width;
+            finalCanvas.width=totalWidth;
             finalCanvas.height=height;
             var ctx=finalCanvas.getContext('2d');
             ctx.drawImage(piz,0,0,width,height);
             ctx.drawImage(visibleCanvas,0,0,width,height);
-            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+            if(hiddenCanvas){
+              ctx.drawImage(piz,width,0,width,height);
+              ctx.drawImage(hiddenCanvas,width,0,width,height);
+            }
+            var fname=String(p && p.nombre ||'escuela').replace(/[^a-z0-9 -]/gi,'_');
             if(!fname) fname='escuela';
-            fname+='.jpg';
+            fname += hiddenCanvas ? '_doble.jpg' : '.jpg';
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
               var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
+              var isIOS=/iPhone|iPad|iPod/i.test(ua);
+              if(isIOS){
+                try{ window.open(url,'_blank'); }catch(e){}
+                setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} },5000);
               } else {
                 var a=document.createElement('a');
                 a.href=url;
@@ -63,9 +109,8 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+                URL.revokeObjectURL(url);
               }
-              URL.revokeObjectURL(url);
             },'image/jpeg',0.92);
           };
           piz.onerror=function(){
@@ -76,17 +121,15 @@
             finalCanvas.height=alto;
             var ctx=finalCanvas.getContext('2d');
             ctx.drawImage(visibleCanvas,0,0,ancho,alto);
-            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
+            var fname=String(p && p.nombre ||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
               var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
+              var isIOS=/iPhone|iPad|iPod/i.test(ua);
+              if(isIOS){
+                try{ window.open(url,'_blank'); }catch(e){}
+                setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} },5000);
               } else {
                 var a=document.createElement('a');
                 a.href=url;
@@ -94,9 +137,8 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+                URL.revokeObjectURL(url);
               }
-              URL.revokeObjectURL(url);
             },'image/jpeg',0.92);
           };
           piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
