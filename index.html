@@ -632,7 +632,20 @@
           if(!fc) return;
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
+          var originalOverflow=fc.style.overflow;
+          var originalMaxHeight=fc.style.maxHeight;
+          var originalScroll=fc.scrollTop;
+          try{
+            fc.style.overflow='visible';
+            fc.style.maxHeight='none';
+            fc.scrollTop=0;
+          }catch(e){}
           var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+          try{
+            fc.style.overflow=originalOverflow;
+            fc.style.maxHeight=originalMaxHeight;
+            fc.scrollTop=originalScroll;
+          }catch(e){}
           var piz=new Image();
           piz.onload=function(){
             var width=piz.width;
@@ -649,23 +662,17 @@
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
-              var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
-              } else {
+              try{
                 var a=document.createElement('a');
                 a.href=url;
                 a.download=fname;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+              }catch(e){
+                try{ window.location.href=url; }catch(_){}
               }
-              URL.revokeObjectURL(url);
+              try{ URL.revokeObjectURL(url); }catch(_){}
             },'image/jpeg',0.92);
           };
           piz.onerror=function(){
@@ -680,23 +687,17 @@
             finalCanvas.toBlob(function(blob){
               if(!blob) return;
               var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
-              var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
-              } else {
+              try{
                 var a=document.createElement('a');
                 a.href=url;
                 a.download=fname;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+              }catch(e){
+                try{ window.location.href=url; }catch(_){}
               }
-              URL.revokeObjectURL(url);
+              try{ URL.revokeObjectURL(url); }catch(_){}
             },'image/jpeg',0.92);
           };
           piz.src = (targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
@@ -1222,72 +1223,103 @@
           if(!fc) return;
           var isMobile=((window.innerWidth||1024)<=600)||(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
           var scaleVal=isMobile?1.25:2;
-          var visibleCanvas=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+
+          var originalScroll=fc.scrollTop||0;
+          var visibleHeight=fc.clientHeight||fc.offsetHeight||0;
+          var scrollHeight=fc.scrollHeight||visibleHeight;
+          var needsTwo=visibleHeight>0 && scrollHeight>visibleHeight+10;
+
+          var canvas1=null;
+          var canvas2=null;
+          try{
+            fc.scrollTop=0;
+            canvas1=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            if(needsTwo){
+              var secondOffset=scrollHeight-visibleHeight;
+              if(secondOffset<0) secondOffset=0;
+              fc.scrollTop=secondOffset;
+              canvas2=await html2canvas(targetFrame,{ backgroundColor:null, useCORS:true, scale:scaleVal });
+            }
+          }catch(e){
+            try{ fc.scrollTop=originalScroll; }catch(_){}
+            return;
+          }
+          try{ fc.scrollTop=originalScroll; }catch(_){}
+
           var piz=new Image();
           piz.onload=function(){
-            var width=piz.width;
-            var height=piz.height;
-            var finalCanvas=document.createElement('canvas');
-            finalCanvas.width=width;
-            finalCanvas.height=height;
-            var ctx=finalCanvas.getContext('2d');
-            ctx.drawImage(piz,0,0,width,height);
-            ctx.drawImage(visibleCanvas,0,0,width,height);
-            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
-            if(!fname) fname='escuela';
-            fname+='.jpg';
-            finalCanvas.toBlob(function(blob){
-              if(!blob) return;
-              var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
-              var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
-              } else {
-                var a=document.createElement('a');
-                a.href=url;
-                a.download=fname;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+            try{
+              var pageWidth=piz.width;
+              var pageHeight=piz.height;
+              var finalWidth=needsTwo && canvas2 ? pageWidth*2 : pageWidth;
+              var finalHeight=pageHeight;
+              var finalCanvas=document.createElement('canvas');
+              finalCanvas.width=finalWidth;
+              finalCanvas.height=finalHeight;
+              var ctx=finalCanvas.getContext('2d');
+
+              ctx.drawImage(piz,0,0,pageWidth,pageHeight);
+              if(canvas1){
+                ctx.drawImage(canvas1,0,0,pageWidth,pageHeight);
               }
-              URL.revokeObjectURL(url);
-            },'image/jpeg',0.92);
+              if(needsTwo && canvas2){
+                ctx.drawImage(piz,pageWidth,0,pageWidth,pageHeight);
+                ctx.drawImage(canvas2,0,0,pageWidth,pageHeight);
+              }
+
+              var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+              if(!fname) fname='escuela';
+              fname += needsTwo && canvas2 ? '_2paginas.jpg' : '.jpg';
+
+              finalCanvas.toBlob(function(blob){
+                if(!blob) return;
+                var url=URL.createObjectURL(blob);
+                try{
+                  var a=document.createElement('a');
+                  a.href=url;
+                  a.download=fname;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }catch(e){
+                  try{ window.location.href=url; }catch(_){}
+                }
+                try{ URL.revokeObjectURL(url); }catch(_){}
+              },'image/jpeg',0.92);
+            }catch(e){}
           };
           piz.onerror=function(){
-            var ancho=visibleCanvas.width;
-            var alto=visibleCanvas.height;
-            var finalCanvas=document.createElement('canvas');
-            finalCanvas.width=ancho;
-            finalCanvas.height=alto;
-            var ctx=finalCanvas.getContext('2d');
-            ctx.drawImage(visibleCanvas,0,0,ancho,alto);
-            var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_')+'.jpg';
-            finalCanvas.toBlob(function(blob){
-              if(!blob) return;
-              var url=URL.createObjectURL(blob);
-              var proto=(window.location&&window.location.protocol)||'';
-              var isHttps=proto.indexOf('https')===0;
-              var ua=(navigator&&navigator.userAgent)||'';
-              var isMobileDevice=/Android|iPhone|iPad|iPod/i.test(ua);
-              if(isHttps && isMobileDevice){
-                alert('Se abrirá la imagen; usa Guardar imagen desde el navegador.');
-                window.location.href=url;
-              } else {
-                var a=document.createElement('a');
-                a.href=url;
-                a.download=fname;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                alert('Imagen descargada: '+fname);
+            try{
+              if(!canvas1) return;
+              var ancho=canvas1.width;
+              var alto=canvas1.height;
+              var finalCanvas=document.createElement('canvas');
+              finalCanvas.width=needsTwo && canvas2 ? ancho*2 : ancho;
+              finalCanvas.height=alto;
+              var ctx=finalCanvas.getContext('2d');
+              ctx.drawImage(canvas1,0,0,ancho,alto);
+              if(needsTwo && canvas2){
+                ctx.drawImage(canvas2,ancho,0,ancho,alto);
               }
-              URL.revokeObjectURL(url);
-            },'image/jpeg',0.92);
+              var fname=String(p.nombre||'escuela').replace(/[^a-z0-9 -]/gi,'_');
+              if(!fname) fname='escuela';
+              fname += needsTwo && canvas2 ? '_2paginas.jpg' : '.jpg';
+              finalCanvas.toBlob(function(blob){
+                if(!blob) return;
+                var url=URL.createObjectURL(blob);
+                try{
+                  var a=document.createElement('a');
+                  a.href=url;
+                  a.download=fname;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }catch(e){
+                  try{ window.location.href=url; }catch(_){}
+                }
+                try{ URL.revokeObjectURL(url); }catch(_){}
+              },'image/jpeg',0.92);
+            }catch(e){}
           };
           piz.src=(targetFrame.querySelector('.frame-img') && targetFrame.querySelector('.frame-img').src) || 'pizarron.png';
         };
