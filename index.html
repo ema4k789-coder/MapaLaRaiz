@@ -23,27 +23,6 @@
         }
       }
       var frameContent=root.querySelector('.frame-content');
-      if(frameContent){
-        var scrollTimeout=null;
-        frameContent.addEventListener('scroll', function(){
-          if(scrollTimeout) clearTimeout(scrollTimeout);
-          scrollTimeout=setTimeout(function(){
-            var ultimoCompleto=null;
-            Array.prototype.forEach.call(frameContent.children, function(child){
-              var childBottom=child.offsetTop+child.offsetHeight;
-              if(childBottom <= frameContent.scrollTop + frameContent.clientHeight){
-                ultimoCompleto=child;
-              }
-            });
-            if(ultimoCompleto){
-              var nuevoScroll=ultimoCompleto.offsetTop+ultimoCompleto.offsetHeight-frameContent.clientHeight;
-              if(frameContent.scrollTop!==nuevoScroll){
-                frameContent.scrollTop=nuevoScroll;
-              }
-            }
-          },120);
-        });
-      }
       var dlBtn=root.querySelector('.popup-dl-btn');
       if(dlBtn){
         dlBtn.onclick = async function(ev){
@@ -571,6 +550,7 @@
           <span id="counter" title="Cantidad de resultados">0</span>
         </div>
         <button id="toggleBusRoutesBtn" title="Mostrar/ocultar recorridos de colectivos">🚌</button>
+        <button id="togglePoiBtn" title="Mostrar/ocultar lugares de interés docente">🏛</button>
         <select id="busRouteSelect" style="display:none"></select>
         <button id="geojsonEditModeBtn" title="Modo edición GeoJSON">⤡</button>
       </div>
@@ -597,6 +577,8 @@
     var map = null;
     var allSchools = [];
     var markers = [];
+    var poiFeatures = [];
+    var poiMarkers = [];
     var municipioGeomByName = {};
     var boundaryLayers = [];
     var localityBoundariesLoaded = false;
@@ -607,6 +589,7 @@
     var busRoutesAllFeatures = [];
     var busRouteKeys = [];
     var busRouteKeySamples = {};
+    var poiVisible = false;
     function isMobilePortrait(){ var w=window.innerWidth||0,h=window.innerHeight||0; return w<=600 && h>=w; }
     function onPopupOpenCommon(){ try{ var w=window.innerWidth||1024; if(w<=600){ var admin=document.getElementById('admin-panel'); if(admin && window.adminPanelOpen){ window.adminPanelOpen=false; admin.style.display='none'; } } }catch(e){} }
     function hideSchoolOverlay(){ var ov=document.getElementById('schoolOverlay'); if(ov){ ov.classList.remove('active'); } if(typeof clearBusHighlight==='function'){ try{ clearBusHighlight(); }catch(e){} } }
@@ -735,6 +718,17 @@
     
     map = L.map('map').setView([-34.921, -57.954], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(map);
+    (function(){
+      if(!L || !L.Marker || !L.divIcon) return;
+      var buildingIcon=L.divIcon({
+        className:'poi-building-wrapper',
+        html:"<div class='poi-building-icon'>🏛</div>",
+        iconSize:[60,60],
+        iconAnchor:[30,60],
+        popupAnchor:[0,-40]
+      });
+      L.Marker.prototype.options.icon=buildingIcon;
+    })();
     map.createPane('boundariesGlowPane'); map.getPane('boundariesGlowPane').style.zIndex = 340;
     map.createPane('boundariesPane'); map.getPane('boundariesPane').style.zIndex = 341;
     map.createPane('localitiesGlowPane'); map.getPane('localitiesGlowPane').style.zIndex = 330;
@@ -1117,13 +1111,15 @@
           m.on('popupclose', function(){ if(typeof clearBusHighlight==='function'){ try{ clearBusHighlight(); }catch(e){} } });
         }
         markers.push(m); }catch(e){} }); var c=document.getElementById('counter'); if(c) c.textContent=String(a.length); }
-    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var clearSearchBtn=document.getElementById('clearSearchBtn'); var levelAll=null; var levelChecks=[]; var toggleBusRoutesBtn=document.getElementById('toggleBusRoutesBtn'); var busRouteSelect=document.getElementById('busRouteSelect');
+    var distritoSelect=document.getElementById('filterDistrito'); var localidadSelect=document.getElementById('filterLocalidad'); var searchInput=document.getElementById('searchInput'); var clearSearchBtn=document.getElementById('clearSearchBtn'); var levelAll=null; var levelChecks=[]; var toggleBusRoutesBtn=document.getElementById('toggleBusRoutesBtn'); var busRouteSelect=document.getElementById('busRouteSelect'); var togglePoiBtn=document.getElementById('togglePoiBtn');
     function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g,function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]; }); }
     function setClearSearchVisible(){ if(!clearSearchBtn||!searchInput) return; var wrap=clearSearchBtn.parentNode; if(!wrap || !wrap.classList) return; wrap.classList.toggle('has-text', String(searchInput.value||'').length>0); }
     function updateLevelsBadgeCount(){ var btn=document.getElementById('levelsHeaderBtn'); if(!btn) return; var total=Array.isArray(levelChecks)?levelChecks.length:0; var count=(levelAll && levelAll.checked) ? total : levelChecks.filter(function(cb){ return cb.checked; }).length; btn.setAttribute('data-count', String(count)); }
     function populateLocalities(){ var distrito=(distritoSelect.value||'').trim(); if(!distrito || distrito!=='La Plata'){ if(localidadSelect){ localidadSelect.value=''; localidadSelect.innerHTML=''; localidadSelect.style.display='none'; } return; } var base=getBaseFeatures(); var locSet=new Set(); var hasLaPlata=false; base.forEach(function(f){ var p=f.properties||{}; if((p.distrito||'').trim()===distrito){ var canon=(p.localidad_norm||normalizeLocalidadName(p.localidad||'')); if(canon){ if(canon==='La Plata') hasLaPlata=true; locSet.add(canon); } } }); var list=Array.from(locSet).sort(function(a,b){ return a.localeCompare(b,'es'); }); localidadSelect.innerHTML=''; var opt=document.createElement('option'); opt.value=''; opt.textContent='Todas las localidades'; localidadSelect.appendChild(opt); if(distrito==='La Plata'&&hasLaPlata){ var cascoOpt=document.createElement('option'); cascoOpt.value='Casco Urbano'; cascoOpt.textContent='Casco Urbano'; localidadSelect.appendChild(cascoOpt); }
       list.forEach(function(l){ var ln=l.trim().toLowerCase(); if(distrito==='La Plata' && ln==='la plata') return; var o=document.createElement('option'); if(ln==='san carlos'){ o.value='SAN CARLOS'; o.textContent='SAN CARLOS'; } else { o.value=l; o.textContent=l; } localidadSelect.appendChild(o); }); localidadSelect.style.display=''; }
     function getBaseFeatures(){ return allSchools.map(function(f){ var p=f.properties||{}; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; }); }
+    function clearPoiMarkers(){ try{ poiMarkers.forEach(function(m){ try{ map.removeLayer(m); }catch(e){} }); poiMarkers=[]; }catch(e){} }
+    function renderPoiMarkers(){ if(!poiVisible || !Array.isArray(poiFeatures)) return; clearPoiMarkers(); var svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g1' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#ffeb3b'/><stop offset='50%' stop-color='#ff9800'/><stop offset='100%' stop-color='#f44336'/></linearGradient></defs><circle cx='32' cy='32' r='30' fill='url(#g1)'/><rect x='20' y='20' width='24' height='30' fill='#ffffff' stroke='#1a237e' stroke-width='2'/><polygon points='32,10 16,20 48,20' fill='#1a237e'/><rect x='28' y='34' width='8' height='16' fill='#ffeb3b' stroke='#1a237e' stroke-width='2'/></svg>"; var icon=L.icon({ iconUrl:'data:image/svg+xml;utf8,'+encodeURIComponent(svg), iconSize:[64,64], iconAnchor:[32,64], popupAnchor:[0,-44], className:'poi-building-img' }); poiFeatures.forEach(function(f){ try{ var coords=f.geometry&&f.geometry.coordinates; if(!coords||coords.length<2) return; var lat=Number(coords[1]); var lng=Number(coords[0]); if(isNaN(lat)||isNaN(lng)) return; var p=f.properties||{}; var m=L.marker([lat,lng],{ icon:icon }).addTo(map); var nombreBase=p.Lugar||p.nombre||p.nombre_lugar||p.titulo||p.descripcion||''; var nombreFinal=nombreBase||'Lugar de interés docente'; var html="<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar ficha'>💾</button><div class='frame-content'>"; html+="<div class='poi-name-tag'>"+nombreFinal+"</div>"; Object.keys(p).forEach(function(k){ var kl=(k||'').toString().toLowerCase(); if(kl.indexOf('lat')!==-1 || kl.indexOf('long')!==-1 || kl.indexOf('coord')!==-1) return; if(k && k[0]==='_') return; if(kl==='tipo_lugar' || kl==='origen_lugar' || kl==='localidad_norm') return; if(k==='Lugar') return; html+="<div class='field-line'><b>"+k+":</b> "+p[k]+"</div>"; }); html+="</div><button type='button' class='popup-volver-btn'>VOLVER</button></div>"; if(isMobilePortrait()){ m.on('click', function(){ onPopupOpenCommon(); showSchoolOverlay(html,p); }); } else { m.bindPopup(html,{ closeButton:false, autoClose:true, closeOnClick:true, autoPan:false }); m.on('popupopen', function(){ onPopupOpenCommon(); var content=document.querySelector('.leaflet-popup-content'); if(!content) return; if(window.wirePopupInteractions){ window.wirePopupInteractions(content,p,false); } }); } poiMarkers.push(m); }catch(e){} }); }
     function filterSchools(){ var text=(searchInput.value||'').trim().toLowerCase(); var distrito=distritoSelect.value||''; var localidad=(localidadSelect&&localidadSelect.value)||''; var base=getBaseFeatures();
       function normStr(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase(); }
       var levelAllChecked = !!(document.getElementById('levelAll') && document.getElementById('levelAll').checked);
@@ -1136,6 +1132,7 @@
       if(text){ filtered = filtered.filter(function(f){ var p=f.properties||{}; return (p.nombre||'').toLowerCase().includes(text) || (p.numero||'').toString().toLowerCase().includes(text) || (p.nivel||'').toLowerCase().includes(text) || (p.localidad||'').toLowerCase().includes(text) || (p.localidad_norm||'').toLowerCase().includes(text); }); }
       clearMarkers(); renderMarkers(filtered); var c=document.getElementById('counter'); if(c) c.textContent=filtered.length; updateLevelsBadgeCount(); }
     if(toggleBusRoutesBtn){ toggleBusRoutesBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} busRoutesVisible=!busRoutesVisible; if(busRoutesVisible){ toggleBusRoutesBtn.classList.add('active'); if(busRoutesDataLoaded){ updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.style.display=''; } } else { loadBusRoutesIfNeeded().then(function(){ updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.style.display=''; } }).catch(function(){ busRoutesVisible=false; toggleBusRoutesBtn.classList.remove('active'); }); } } else { toggleBusRoutesBtn.classList.remove('active'); updateBusRoutesVisibility(); if(busRouteSelect){ busRouteSelect.value=''; busRouteSelect.style.display='none'; } } }); }
+    var togglePoiBtn=document.getElementById('togglePoiBtn'); if(togglePoiBtn){ togglePoiBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} poiVisible=!poiVisible; if(poiVisible){ togglePoiBtn.classList.add('active'); renderPoiMarkers(); } else { togglePoiBtn.classList.remove('active'); clearPoiMarkers(); } }); }
     if(busRouteSelect){ busRouteSelect.addEventListener('change', function(){ if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); }
     if(clearSearchBtn){ clearSearchBtn.addEventListener('click', function(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} if(!searchInput) return; searchInput.value=''; setClearSearchVisible(); filterSchools(); try{ searchInput.focus(); }catch(e){} }); }
     distritoSelect.addEventListener('change', function(){ populateLocalities(); filterSchools(); applyPanelPosition(); updateDisplayForSelectedDistrict(); if((distritoSelect.value||'').trim()==='La Plata'){ addLocalityBoundariesLaPlata(); } if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); if(localidadSelect){ localidadSelect.addEventListener('change', function(){ filterSchools(); updateDisplayForSelectedDistrict(); if(busRoutesVisible&&busRoutesDataLoaded){ rebuildBusRoutesLayer(); } }); } searchInput.addEventListener('input', function(){ setClearSearchVisible(); filterSchools(); }); setClearSearchVisible();
@@ -1150,7 +1147,7 @@
     function addLocalityBoundariesLaPlata(){ if(Array.isArray(cachedLocalitiesLP)){ cachedLocalitiesLP.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#00aaff', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, fill:false, dashArray:'6,4' }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, dashArray:'6,4' }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); return Promise.resolve(true); }
       return fetch('localidades_la_plata.geojson', { cache:'force-cache' }).then(function(r){ if(!r||!r.ok) return false; return r.json(); }).then(function(gj){ var feats=Array.isArray(gj.features)?gj.features:[]; feats.forEach(function(f){ var g=f&&f.geometry; if(!g) return; if(isPolygonGeojson(g)){ var glow=L.geoJSON(g,{ pane:'localitiesGlowPane', color:'#00aaff', weight:10, opacity:0.08, fill:false }); var sharp=L.geoJSON(g,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, fill:false, dashArray:'6,4' }); localityLayers.push(glow); localityLayers.push(sharp); if(!boundariesHidden){ glow.addTo(map); sharp.addTo(map); try{ glow.bringToFront(); sharp.bringToFront(); }catch(e){} } } else if(g.type==='LineString' && Array.isArray(g.coordinates)){ var latlngs=g.coordinates.map(function(c){ return [c[1],c[0]]; }); var line=L.polyline(latlngs,{ pane:'localitiesPane', color:'#00aaff', weight:2, opacity:0.9, dashArray:'6,4' }); localityLayers.push(line); if(!boundariesHidden){ line.addTo(map); try{ line.bringToFront(); }catch(e){} } } }); cachedLocalitiesLP=feats; return true; }).catch(function(){ return false; }); }
     function updateDisplayForSelectedDistrict(){ try{ clearBoundaryLayers(); clearLocalityLayers(); if(boundariesHidden){ railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); return; } var dist=(distritoSelect&&distritoSelect.value)||''; var distKey=(dist||'').trim().toLowerCase(); if(!distKey){ Object.keys(municipioGeomByName).forEach(function(k){ addBoundaryGeoJSON(municipioGeomByName[k]); }); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='la plata'){ if(municipioGeomByName['la plata']) addBoundaryGeoJSON(municipioGeomByName['la plata']); railwayLayers.forEach(function(l){ try{ l.addTo(map); }catch(e){} }); addLocalityBoundariesLaPlata(); } else if(distKey==='berisso'){ if(municipioGeomByName['berisso']) addBoundaryGeoJSON(municipioGeomByName['berisso']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } else if(distKey==='ensenada'){ if(municipioGeomByName['ensenada']) addBoundaryGeoJSON(municipioGeomByName['ensenada']); railwayLayers.forEach(function(l){ try{ map.removeLayer(l); }catch(e){} }); } }catch(e){} }
-    fetch('camposfiltrados.geojson').then(function(r){ return r.ok?r.text():Promise.resolve('{}'); }).then(function(text){ var data; try{ data=JSON.parse(text); }catch(_){ data={ features:[] }; } if(!data||!data.features) data={ features:[] }; allSchools=data.features.map(function(f){ var p=f.properties||{}; var hasGeom=f.geometry&&Array.isArray(f.geometry.coordinates); var lat=hasGeom?Number(f.geometry.coordinates[1]):Number(p.latitud||p.lat||p.latitude); var lng=hasGeom?Number(f.geometry.coordinates[0]):Number(p.longitud||p.lng||p.longitude); if(isNaN(lat)||isNaN(lng)){ var canon=normalizeLocalidadName(p.localidad||''); lat=-34.92; lng=-57.95; } f.geometry={ type:'Point', coordinates:[lng,lat] }; p._lat=lat; p._lng=lng; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; });
+    fetch('camposfiltrados.geojson').then(function(r){ return r.ok?r.text():Promise.resolve('{}'); }).then(function(text){ var data; try{ data=JSON.parse(text); }catch(_){ data={ features:[] }; } if(!data||!data.features) data={ features:[] }; var todas=data.features.map(function(f){ var p=f.properties||{}; var hasGeom=f.geometry&&Array.isArray(f.geometry.coordinates); var lat=hasGeom?Number(f.geometry.coordinates[1]):Number(p.latitud||p.lat||p.latitude); var lng=hasGeom?Number(f.geometry.coordinates[0]):Number(p.longitud||p.lng||p.longitude); if(isNaN(lat)||isNaN(lng)){ var canon=normalizeLocalidadName(p.localidad||''); lat=-34.92; lng=-57.95; } f.geometry={ type:'Point', coordinates:[lng,lat] }; p._lat=lat; p._lng=lng; p.localidad_norm=normalizeLocalidadName(p.localidad||''); f.properties=p; return f; }); poiFeatures=todas.filter(function(f){ return (f.properties&&f.properties.tipo_lugar||'')==='lugar_interes_docente'; }); allSchools=todas.filter(function(f){ return (f.properties&&f.properties.tipo_lugar||'')!=='lugar_interes_docente'; });
       var nivelesUnicos = Array.from(new Set(allSchools.map(function(e){ return (e.properties&&e.properties.nivel||'').trim(); }))).filter(function(n){ return n; });
       function normStr(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase(); }
       var nivelesLower = new Set(nivelesUnicos.map(function(n){ return normStr(n); }));

@@ -4,7 +4,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
 }).addTo(map);
 
-// Pane para contorno difuminado de límites
+const poiIcon = L.divIcon({
+  className: 'poi-building-wrapper',
+  html: "<div class='poi-building-icon'>🏛</div>",
+  iconSize: [60, 60],
+  iconAnchor: [30, 60],
+  popupAnchor: [0, -40]
+});
+
 map.createPane('boundariesGlowPane');
 map.getPane('boundariesGlowPane').style.zIndex = 350;
 map.getPane('boundariesGlowPane').style.pointerEvents = 'none';
@@ -273,8 +280,12 @@ if (modoEdicion) {
   });
 }
 
+let poiVisible = false;
+
 let allSchools = [];
 let markers = [];
+let poiFeatures = [];
+let poiMarkers = [];
 let localityBoundariesLoaded = false;
 let boundariesLocalOnly = true;
 let boundariesHidden = false;
@@ -384,64 +395,88 @@ function clearMarkers() {
   markers = [];
 }
 
+function clearPoiMarkers() {
+  poiMarkers.forEach(m => map.removeLayer(m));
+  poiMarkers = [];
+}
+
 function renderMarkers(schools) {
   if (editModeActive) return;
   console.log('renderMarkers recibido:', schools.length, schools.slice(0,3));
   clearMarkers();
   schools.forEach(school => {
     const coords = school.geometry.coordinates;
-    const props = school.properties;
-    const nivel = props.nivel || '';
-    let color = getColorByLevel(nivel);
-    const nombreStr = typeof props.nombre === 'string' ? props.nombre : '';
-    const tipoStr = typeof props.tipo_organizacion === 'string' ? props.tipo_organizacion : '';
-    if (nombreStr.includes('adultos') || nombreStr.includes('Adultos') || nombreStr.includes('ADULTOS')) {
-      color = '#8E44AD';
-    }
-    if (
-      nombreStr.includes('JARDÍN MATERNAL') ||
-      nombreStr.includes('JARDIN MATERNAL') ||
-      nombreStr.includes('Jardín Maternal') ||
-      nombreStr.includes('Jardin Maternal') ||
-      tipoStr.includes('JARDÍN MATERNAL') ||
-      tipoStr.includes('JARDIN MATERNAL')
-    ) {
-      color = '#3399FF';
+    const props = school.properties || {};
+    const tipoLugar = props.tipo_lugar || '';
+    const esLugarInteres = tipoLugar === 'lugar_interes_docente';
+    let marker;
+    if (esLugarInteres) {
+      marker = L.marker([coords[1], coords[0]], {
+        icon: poiIcon
+      }).addTo(map);
+    } else {
+      const nivel = props.nivel || '';
+      let color = getColorByLevel(nivel);
+      const nombreStr = typeof props.nombre === 'string' ? props.nombre : '';
+      const tipoStr = typeof props.tipo_organizacion === 'string' ? props.tipo_organizacion : '';
+      if (nombreStr.includes('adultos') || nombreStr.includes('Adultos') || nombreStr.includes('ADULTOS')) {
+        color = '#8E44AD';
+      }
+      if (
+        nombreStr.includes('JARDÍN MATERNAL') ||
+        nombreStr.includes('JARDIN MATERNAL') ||
+        nombreStr.includes('Jardín Maternal') ||
+        nombreStr.includes('Jardin Maternal') ||
+        tipoStr.includes('JARDÍN MATERNAL') ||
+        tipoStr.includes('JARDIN MATERNAL')
+      ) {
+        color = '#3399FF';
+      }
+
+      marker = L.circleMarker([coords[1], coords[0]], {
+        color: color,
+        fillColor: color,
+        radius: 12,
+        weight: 3,
+        fillOpacity: 0.85,
+        opacity: 1
+      }).addTo(map);
     }
 
-    const marker = L.circleMarker([coords[1], coords[0]], {
-      color: color,
-      fillColor: color,
-      radius: 12,
-      weight: 3,
-      fillOpacity: 0.85,
-      opacity: 1
-    }).addTo(map);
-
-    let nombreBase = props.nombre || '';
-let numeroBase = props.numero || '';
-let nivelBase = nivel.toLowerCase();
-let sigla = '';
-if (nivelBase.includes('primaria')) sigla = 'EP';
-else if (nivelBase.includes('secundaria')) sigla = 'ES';
-else if (nivelBase.includes('inicial')) sigla = 'JI';
-else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelBase.includes('instituto superior')) sigla = 'ISFD';
+    let nombreBase = props.nombre || props.nombre_lugar || props.titulo || props.descripcion || '';
+    let numeroBase = props.numero || '';
+    let nivelBase = (props.nivel || '').toLowerCase();
+    let sigla = '';
+    if (nivelBase.includes('primaria')) sigla = 'EP';
+    else if (nivelBase.includes('secundaria')) sigla = 'ES';
+    else if (nivelBase.includes('inicial')) sigla = 'JI';
+    else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelBase.includes('instituto superior')) sigla = 'ISFD';
     let nombreFinal = '';
-    if (sigla) nombreFinal = `${sigla} ${numeroBase} - ${nombreBase}`;
-    else nombreFinal = `${numeroBase} - ${nombreBase}`;
+    if (esLugarInteres) {
+      nombreFinal = nombreBase || 'Lugar de interés docente';
+    } else {
+      if (sigla) nombreFinal = `${sigla} ${numeroBase} - ${nombreBase}`;
+      else nombreFinal = `${numeroBase} - ${nombreBase}`;
+    }
     let datosHtml = `<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar imagen'>⬇</button><div class='frame-content'>`;
     datosHtml += `<div class='name-tag'>${nombreFinal}</div>`;
-    datosHtml += `<div class='field-line'><b>Nivel:</b> ${nivel}</div>`;
-    datosHtml += `<div class='field-line'><b>Número:</b> ${props.numero || ''}</div>`;
-    datosHtml += `<div class='field-line'><b>Localidad:</b> ${props.localidad || ''}</div>`;
+    if (!esLugarInteres) {
+      const nivel = props.nivel || '';
+      datosHtml += `<div class='field-line'><b>Nivel:</b> ${nivel}</div>`;
+      datosHtml += `<div class='field-line'><b>Número:</b> ${props.numero || ''}</div>`;
+      datosHtml += `<div class='field-line'><b>Localidad:</b> ${props.localidad || ''}</div>`;
+    }
     for (const clave in props) {
-      if (!["nombre","numero","nivel","localidad"].includes(clave)) {
-        datosHtml += `<div class='field-line'><b>${clave}:</b> ${props[clave]}</div>`;
+      if (esLugarInteres) {
+        if (["tipo_lugar","origen_lugar"].includes(clave)) continue;
+      } else {
+        if (["nombre","numero","nivel","localidad"].includes(clave)) continue;
       }
+      datosHtml += `<div class='field-line'><b>${clave}:</b> ${props[clave]}</div>`;
     }
     datosHtml += `</div><button type='button' class='popup-volver-btn'>VOLVER</button></div>`;
     marker.bindPopup(datosHtml, { closeButton: false, autoClose: true, closeOnClick: true });
-  marker.on('popupopen', function() {
+    marker.on('popupopen', function() {
     try{
       const w = window.innerWidth || 1024;
       if (w <= 600) {
@@ -526,7 +561,8 @@ else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelB
             }
             finalCanvas.toBlob(function(blob) {
               const url = URL.createObjectURL(blob);
-              const base = (props.nombre || 'escuela').toString().replace(/[^a-z0-9\- ]/gi,'_');
+              const baseNombre = props.nombre || props.nombre_lugar || props.titulo || props.descripcion || (esLugarInteres ? 'lugar_interes' : 'escuela');
+              const base = baseNombre.toString().replace(/[^a-z0-9\- ]/gi,'_');
               const fname = pages > 1 ? `${base}_paginas${pages}.jpg` : `${base}.jpg`;
               if (isIOS) {
                 try { window.open(url, '_blank'); } catch(e){}
@@ -555,6 +591,149 @@ else if (nivelBase.includes('terciario') || nivelBase.includes('isfd') || nivelB
     markers.push(marker);
   });
   document.getElementById('counter').textContent = String(schools.length);
+}
+
+function renderPoiMarkers() {
+  if (editModeActive) return;
+  clearPoiMarkers();
+  poiFeatures.forEach(feature => {
+    const coords = feature.geometry && feature.geometry.coordinates;
+    if (!coords || coords.length < 2) return;
+    const lat = Number(coords[1]);
+    const lng = Number(coords[0]);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const props = feature.properties || {};
+    const marker = L.marker([lat, lng], {
+      icon: poiIcon
+    }).addTo(map);
+
+    let nombreBase = props.Lugar || props.nombre || props.nombre_lugar || props.titulo || props.descripcion || '';
+    let nombreFinal = nombreBase || 'Lugar de interés docente';
+    let datosHtml = `<div class='popup-frame'><img class='frame-img' src='pizarron.png' alt=''><button class='popup-dl-btn' title='Descargar ficha'>💾</button><div class='frame-content'>`;
+    datosHtml += `<div class='poi-name-tag'>${nombreFinal}</div>`;
+    for (const clave in props) {
+      const kl = (clave || '').toString().toLowerCase();
+      if (kl.indexOf('lat') !== -1 || kl.indexOf('long') !== -1 || kl.indexOf('coord') !== -1) continue;
+      if (clave && clave[0] === '_') continue;
+      if (kl === 'tipo_lugar' || kl === 'origen_lugar' || kl === 'localidad_norm') continue;
+      if (clave === 'Lugar') continue;
+      datosHtml += `<div class='field-line'><b>${clave}:</b> ${props[clave]}</div>`;
+    }
+    datosHtml += `</div><button type='button' class='popup-volver-btn'>VOLVER</button></div>`;
+    marker.bindPopup(datosHtml, { closeButton: false, autoClose: true, closeOnClick: true });
+    marker.on('popupopen', function() {
+      try{
+        const w = window.innerWidth || 1024;
+        if (w <= 600) {
+          const panel = document.getElementById('filterLevelPanel');
+          const panelContent = document.getElementById('panelContent');
+          if (panel && !panel.classList.contains('collapsed')) {
+            panel.classList.add('collapsed');
+          }
+          if (panelContent && !panelContent.classList.contains('hidden')) {
+            panelContent.classList.add('hidden');
+          }
+          const admin = document.getElementById('admin-panel');
+          if (admin && window.getComputedStyle(admin).display !== 'none') { 
+            window.adminPanelOpen = false; 
+            admin.style.display = 'none'; 
+          }
+        }
+      }catch(e){}
+      const content = document.querySelector('.leaflet-popup-content');
+      if (!content) return;
+      const frame = content.querySelector('.popup-frame');
+      const imgEl = content.querySelector('.frame-img');
+      if (frame && imgEl) {
+        imgEl.onerror = function(){ imgEl.remove(); };
+        if (window.getFrameURL) {
+          window.getFrameURL().then(function(url){ if (url) imgEl.src = url; });
+        }
+      }
+      const frameContent = content.querySelector('.frame-content');
+      const dlBtn = content.querySelector('.popup-dl-btn');
+      if (dlBtn) {
+        dlBtn.onclick = async function(ev) {
+          ev.stopPropagation();
+          const targetFrame = content.querySelector('.popup-frame');
+          if (!targetFrame) return;
+          const frameContent = targetFrame.querySelector('.frame-content');
+          if (!frameContent) return;
+          const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+          const scaleVal = 2;
+          const originalScroll = frameContent.scrollTop;
+          const originalMaxHeight = frameContent.style.maxHeight;
+          const originalHeight = frameContent.style.height;
+          const originalOverflowY = frameContent.style.overflowY;
+          const fullHeight = frameContent.scrollHeight;
+          frameContent.style.maxHeight = 'none';
+          frameContent.style.height = fullHeight + 'px';
+          frameContent.style.overflowY = 'visible';
+          frameContent.scrollTop = 0;
+          const contentCanvas = await html2canvas(frameContent, { backgroundColor: null, useCORS: true, scale: scaleVal });
+          frameContent.style.maxHeight = originalMaxHeight;
+          frameContent.style.height = originalHeight;
+          frameContent.style.overflowY = originalOverflowY;
+          frameContent.scrollTop = originalScroll;
+          const pizarronImg = new window.Image();
+          pizarronImg.src = targetFrame.querySelector('.frame-img')?.src || 'pizarron.png';
+          pizarronImg.onload = function() {
+            const width = pizarronImg.width;
+            const height = pizarronImg.height;
+            const contentHeight = contentCanvas.height;
+            const pages = Math.max(1, Math.ceil(contentHeight / height));
+            const sliceHeight = Math.ceil(contentHeight / pages);
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = width;
+            finalCanvas.height = height * pages;
+            const ctx = finalCanvas.getContext('2d');
+            for (let i = 0; i < pages; i++) {
+              const srcY = i * sliceHeight;
+              let srcH = sliceHeight;
+              if (srcY + srcH > contentHeight) {
+                srcH = contentHeight - srcY;
+              }
+              if (srcH <= 0) continue;
+              const pageCanvas = document.createElement('canvas');
+              pageCanvas.width = width;
+              pageCanvas.height = height;
+              const pageCtx = pageCanvas.getContext('2d');
+              pageCtx.drawImage(pizarronImg, 0, 0, width, height);
+              pageCtx.drawImage(contentCanvas, 0, srcY, contentCanvas.width, srcH, 0, 0, width, height);
+              ctx.drawImage(pageCanvas, 0, i * height);
+            }
+            finalCanvas.toBlob(function(blob) {
+              const url = URL.createObjectURL(blob);
+              const baseNombre = props.nombre || props.nombre_lugar || props.titulo || props.descripcion || 'lugar_interes';
+              const base = baseNombre.toString().replace(/[^a-z0-9\- ]/gi,'_');
+              const fname = pages > 1 ? `${base}_paginas${pages}.jpg` : `${base}.jpg`;
+              if (isIOS) {
+                try { window.open(url, '_blank'); } catch(e){}
+                setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 5000);
+              } else {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }
+            }, 'image/jpeg', 0.92);
+          };
+        };
+      }
+      const volverBtn = content.querySelector('.popup-volver-btn');
+      if (volverBtn) {
+        volverBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          map.closePopup();
+        };
+      }
+    });
+    poiMarkers.push(marker);
+  });
 }
 
 function filterSchools() {
@@ -674,13 +853,15 @@ fetch('camposfiltrados.geojson')
   })
   .then(data => {
     console.log('GeoJSON cargado, features:', data.features.length, data.features.slice(0,3));
-    allSchools = data.features.map(function(f){
+    const todas = data.features.map(function(f){
       const p = f.properties || {};
       p.localidad_norm = normalizeLocalidadName(p.localidad || '');
       f.properties = p;
       return f;
     });
-    const nivelesUnicos = Array.from(new Set(data.features.map(e => (e.properties.nivel || '').trim()))).filter(n => n);
+    poiFeatures = todas.filter(f => (f.properties.tipo_lugar || '') === 'lugar_interes_docente');
+    allSchools = todas.filter(f => (f.properties.tipo_lugar || '') !== 'lugar_interes_docente');
+    const nivelesUnicos = Array.from(new Set(allSchools.map(e => (e.properties.nivel || '').trim()))).filter(n => n);
     const nivelesLower = new Set(nivelesUnicos.map(n => normalizeStr(n)));
     const nivelesFiltrados = nivelesUnicos.filter(n => {
       const nn = normalizeStr(n);
